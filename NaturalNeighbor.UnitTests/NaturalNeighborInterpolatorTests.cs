@@ -16,7 +16,7 @@ namespace NaturalNeighbor.UnitTests
             var points = TestHelpers.CreateGrid(gridSpec).ToList();
 
             var heights = points.Select(it => SampleFunc(it.X, it.Y)).ToList();
-            var interpolator = new NaturalNeighbor2dInterpolator();
+            var interpolator = new Interpolator2d();
             interpolator.Generate(points.ToArray(), points.Select(it => SampleFunc(it.X, it.Y)).ToArray());
 
             double estZ = SampleFunc(-0.5f, -0.01f);
@@ -41,7 +41,7 @@ namespace NaturalNeighbor.UnitTests
             var points = TestHelpers.CreateGrid(modelSpec).ToArray();
             var heights = points.Select(it => SampleFunc(it.X, it.Y)).ToArray();
 
-            var interpolator = new NaturalNeighbor2dInterpolator();
+            var interpolator = new Interpolator2d();
             interpolator.Generate(points, heights, 0.5);
 
             TestHelpers.CalculateErrors(SampleFunc, (float x, float y) => interpolator.Lookup(x, y), sampleSpec, out var maxError, out var stdError);

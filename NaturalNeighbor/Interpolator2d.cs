@@ -12,10 +12,10 @@ namespace NaturalNeighbor
     /// <summary>
     /// Spatial interpolation based on Voronoi tesellation (by Robin Sibson). Provides a smoother approximation compared to nearest neighbor.
     /// </summary>
-    public class NaturalNeighbor2dInterpolator
+    public class Interpolator2d
     {
 
-        public NaturalNeighbor2dInterpolator()
+        public Interpolator2d()
         {
             _zHeights = new Dictionary<NodeId, double>();
         }

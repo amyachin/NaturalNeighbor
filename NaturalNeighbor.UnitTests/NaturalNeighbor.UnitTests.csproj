@@ -7,7 +7,7 @@
 
     <SignAssembly>true</SignAssembly>
 
-    <AssemblyOriginatorKeyFile>NaturalNeighbor.snk</AssemblyOriginatorKeyFile>
+    <AssemblyOriginatorKeyFile>$(SolutionDir)NaturalNeighbor.snk</AssemblyOriginatorKeyFile>
   </PropertyGroup>
 
   <ItemGroup>
