@@ -80,6 +80,21 @@ namespace NaturalNeighbor
         }
 
 
+        public static Interpolator2d Create(Vector2[] points, double[] heights, double margin)
+        {
+            var interpolator = new Interpolator2d();
+            interpolator.Generate(points, heights, margin);
+            return interpolator;
+        }
+
+        public static Interpolator2d Create(Vector2[] points, double[] heights)
+        {
+            var interpolator = new Interpolator2d();
+            interpolator.Generate(points, heights);
+            return interpolator;
+        }
+
+
         private void InitSnapshot()
         {
             if (_snapshot != null)
@@ -106,7 +121,8 @@ namespace NaturalNeighbor
 
             if (!vid.HasValue)
             {
-                throw new InvalidOperationException("A point is out of bounds.");
+                // Cannot interpolate the point - possibly out of bounds 
+                return double.NaN;
             }
 
             double minDistance2 = Math.Max(float.Epsilon, (double) MinDistanceThreshold * MinDistanceThreshold);
