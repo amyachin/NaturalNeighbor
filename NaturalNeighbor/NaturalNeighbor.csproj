@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net472;netstandard2.1</TargetFrameworks>
+    <SignAssembly>true</SignAssembly>
+    <AssemblyOriginatorKeyFile>NaturalNeighbor.snk</AssemblyOriginatorKeyFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="GitVersion.MsBuild" Version="5.8.1">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="System.Collections.Immutable" Version="6.0.0" />
+    <PackageReference Include="System.Numerics.Vectors" Version="4.5.0" />
+  </ItemGroup>
+
+<ItemGroup>
+    <InternalsVisibleTo Include="NaturalNeighbor.UnitTests, PublicKey=0024000004800000940000000602000000240000525341310004000001000100b1a2c0a8803109303e95b77e4719a108860254344c79a68a5f54df0f0e766a2adde5fd2d6643693f1160a67db787e05570162ce4fe273b9382e0aafc209734e0d689ca2285d0e8e1a635d36ed139562748c16943398ef3d126ddef78c2345247b8afacee072ec43edb2ebf973a1d3d20508ffe12b4c0bd80957543b0c14a46b9" />
+</ItemGroup>
+
+
+</Project>
