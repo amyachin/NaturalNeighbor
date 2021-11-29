@@ -6,7 +6,7 @@ using System.Numerics;
 
 namespace NaturalNeighbor.UnitTests
 {
-    public class VoronoiTests
+    public class SubDivision2dTests
     {
      
         [Fact]
@@ -63,7 +63,7 @@ namespace NaturalNeighbor.UnitTests
 
 
         [Fact]
-        public void TestTriangles()
+        public void TestDelaunayTriangles()
         {
             var gridSpec = new GridSpec { OffsetX = -2.0f, OffsetY = -2.0f, Width = 4, Height = 4, Cols = 3, Rows = 3 };
             var grid = TestHelpers.CreateGrid(gridSpec);

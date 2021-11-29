@@ -2,7 +2,7 @@ using System.Numerics;
 
 namespace NaturalNeighbor
 {
-    public struct Triangle
+    public class Triangle
     {
         public Triangle(Vector2 p1, Vector2 p2, Vector2 p3)
         {
