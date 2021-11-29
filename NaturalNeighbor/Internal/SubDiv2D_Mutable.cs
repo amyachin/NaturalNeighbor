@@ -239,6 +239,21 @@ namespace NaturalNeighbor.Internal
 
         }
 
+
+        public (Triangle, NodeId, NodeId, NodeId) GetNearestTriangle()
+        {
+            var edge = this.RecentEdge;
+
+            int edge1 = GetEdge(edge, TargetEdgeType.NEXT_AROUND_LEFT);
+            int edge2 = GetEdge(edge1, TargetEdgeType.NEXT_AROUND_LEFT);
+
+            var n1 = EdgeOrg(edge1, out var p1);
+            var n2 = EdgeDst(edge1, out var p2);
+            var n3 = EdgeDst(edge2, out var p3);
+
+            return (new Triangle(p1, p2, p3), new NodeId(n1), new NodeId(n2), new NodeId(n3));
+        }
+
         public SubDiv2D_Immutable ToImmutable()
         {
             var vertices = this._vertices.Select((it, idx) => new KeyValuePair<int, ImmutableVertexData>(idx, new ImmutableVertexData(it.pt, it.type, it.firstEdge)));
@@ -280,7 +295,7 @@ namespace NaturalNeighbor.Internal
 
             int total = _quadEdges.Count;
 
-            // loop through all quad-edges, except for the first 3 (#1, #2, #3 - 0 is reserved for "NULL" pointer)
+            // loop through all quad-edges, except for the first 4 entries (#1, #2, #3  - boundaries, and #0 is a sentinel node)
             for (int i = 4; i < total; i++)
             {
                 QuadEdgeData quadedge = _quadEdges[i];

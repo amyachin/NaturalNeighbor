@@ -18,6 +18,7 @@ namespace NaturalNeighbor
         public Interpolator2d()
         {
             _zHeights = new Dictionary<NodeId, double>();
+            Method = InterpolationMethod.Natural;
         }
 
         public void Generate(Vector2[] points, double[] heights)
@@ -87,6 +88,32 @@ namespace NaturalNeighbor
             return interpolator;
         }
 
+        public static Interpolator2d Create(Vector3[] points) 
+        {
+            return Create(points, margin: 0);
+        }
+
+        public static Interpolator2d Create(Vector3[] points, double margin) 
+        {
+            if (points == null) 
+            {
+                throw new ArgumentNullException(nameof(points));
+            }
+
+            Vector2[] xypoints = new Vector2[points.Length];
+            double[] heights = new double[points.Length]; 
+
+            for(int i = 0; i < xypoints.Length; ++i)
+            {
+                var pt = points[i];
+                xypoints[i] = new Vector2(pt.X, pt.Y);
+                heights[i] = pt.Z;
+            }
+            var interpolator = new Interpolator2d();
+            interpolator.Generate(xypoints, heights, margin);
+            return interpolator;
+        }
+
         public static Interpolator2d Create(Vector2[] points, double[] heights)
         {
             var interpolator = new Interpolator2d();
@@ -114,8 +141,11 @@ namespace NaturalNeighbor
         /// <returns></returns>
         public double Lookup(Vector2 target)
         {
-            
-            InitSnapshot();
+
+            if (Method == InterpolationMethod.Natural)
+            {
+                InitSnapshot();
+            }
 
             var vid = _impl.FindNearest(target, out var nearestVertexPt);
 
@@ -125,20 +155,78 @@ namespace NaturalNeighbor
                 return double.NaN;
             }
 
-            double minDistance2 = Math.Max(float.Epsilon, (double) MinDistanceThreshold * MinDistanceThreshold);
+            switch (Method)
+            {
+                case InterpolationMethod.Nearest:
+                    return _zHeights.TryGetValue(vid.Value, out var result) ? result : double.NaN;
 
+                case InterpolationMethod.Linear:
+                    return LookupLinear(target, vid.Value, nearestVertexPt);
+
+                case InterpolationMethod.Natural:
+                    return LookupNatural(target, vid.Value, nearestVertexPt);
+
+                default:
+                    throw new InvalidOperationException($"Method not supported: {Method}.");
+
+            }
+
+        }
+
+        bool IsNearVertex(Vector2 target, Vector2 nearestVertexPt)
+        {
+            double minDistance2 = Math.Max(float.Epsilon, (double) MinDistanceThreshold * MinDistanceThreshold);
             double dx = (double) target.X - nearestVertexPt.X;
             double dy = (double) target.Y - nearestVertexPt.Y;
+            return dx * dx + dy * dy < minDistance2;
+        }
 
-            if (dx*dx + dy*dy < minDistance2)
+        private double LookupLinear(Vector2 target, NodeId nearestVertexId, Vector2 nearestVertexPt)
+        {
+
+            if (IsNearVertex(target, nearestVertexPt))
             {
-                return _zHeights[vid.Value];
+                return _zHeights[nearestVertexId];
+            }
+
+            (var triangle, var n1, var n2, var n3) = _impl.GetNearestTriangle();
+
+            if (!Utils.IsPointInTriangle(triangle, target))
+            {
+                System.Diagnostics.Trace.WriteLine($"Point not  in triangle {target}");
+            }
+
+
+            var points = new List<Vector3>(3);
+            double z;
+
+            if (_zHeights.TryGetValue(n1, out z))
+            {
+                points.Add(new Vector3(triangle.P1, (float) z));
+            }
+
+            if (_zHeights.TryGetValue(n2, out z))
+            {
+                points.Add(new Vector3(triangle.P2, (float) z));
+            }
+
+            if (_zHeights.TryGetValue(n3, out z))
+            {
+                points.Add(new Vector3(triangle.P3, (float) z));
+            }
+
+            return Utils.Lerp(points, target); 
+        }
+
+        private double LookupNatural(Vector2 target, NodeId nearestVertexId, Vector2 nearestVertexPt)
+        {
+            if (IsNearVertex(target, nearestVertexPt))
+            {
+                return _zHeights[nearestVertexId];
             }
 
             _snapshot.RecentEdge = _impl.RecentEdge;
-
             _neighbors.Clear();
-
 
             var newFacet = SubDiv2D_Immutable.SynthesizeFacet(_snapshot, target, _neighbors);
             double newFacetArea = Utils.ComputePolygonArea2(newFacet.Vertices);
@@ -152,7 +240,6 @@ namespace NaturalNeighbor
                 {
                     continue;
                 }
-
 
                 pts.Clear();
 
@@ -174,6 +261,8 @@ namespace NaturalNeighbor
 
         public float MinDistanceThreshold { get; set; }
 
+        public InterpolationMethod Method { get; set; }
+
         private readonly HashSet<NodeId> _neighbors = new HashSet<NodeId>();
         private readonly ConvexPolygonIntersectionHelper _intersectionHelper = new ConvexPolygonIntersectionHelper();
         private readonly Dictionary<NodeId, double> _zHeights;
@@ -181,4 +270,6 @@ namespace NaturalNeighbor
         private SubDiv2D_Mutable _impl;
         private SubDiv2D_Immutable _snapshot;
     }
+
+
 }

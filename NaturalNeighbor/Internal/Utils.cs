@@ -54,7 +54,7 @@ namespace NaturalNeighbor.Internal
             return (k * sumX, k * sumY);
         }
 
-        internal static (double, double)GetCentroid(IReadOnlyList<Vector2> polygon)
+        internal static (double, double) GetCentroid(IReadOnlyList<Vector2> polygon)
         {
             return GetCentroid(0, polygon.Count, polygon);
         }
@@ -78,10 +78,10 @@ namespace NaturalNeighbor.Internal
             }
 
 
-            double mup0 = DotProduct((double)p0.X - start.X, (double)p0.Y - start.Y,  direction.X, direction.Y);
-            double mup1 = DotProduct((double)p1.X - start.X, (double)p1.Y - start.Y,  direction.X, direction.Y);
-            double muq0 = DotProduct((double)q0.X - start.X, (double)q0.Y - start.Y, direction.X, direction.Y);
-            double muq1 = DotProduct((double)q1.X - start.X, (double)q1.Y - start.Y, direction.X, direction.Y);
+            double mup0 = DotProduct((double) p0.X - start.X, (double) p0.Y - start.Y, direction.X, direction.Y);
+            double mup1 = DotProduct((double) p1.X - start.X, (double) p1.Y - start.Y, direction.X, direction.Y);
+            double muq0 = DotProduct((double) q0.X - start.X, (double) q0.Y - start.Y, direction.X, direction.Y);
+            double muq1 = DotProduct((double) q1.X - start.X, (double) q1.Y - start.Y, direction.X, direction.Y);
 
             double a0 = Math.Min(mup0, mup1);
             double a1 = Math.Max(mup0, mup1);
@@ -92,14 +92,14 @@ namespace NaturalNeighbor.Internal
             var k1 = Math.Min(a0, b0);
             var k2 = Math.Max(a1, b1);
 
-            var pt1 = new Vector2((float)(start.X + direction.X * k1), (float)(start.Y + direction.Y * k1));
-            var pt2 = new Vector2((float)(start.X + direction.X * k2), (float)(start.Y + direction.Y * k2));
+            var pt1 = new Vector2((float) (start.X + direction.X * k1), (float) (start.Y + direction.Y * k1));
+            var pt2 = new Vector2((float) (start.X + direction.X * k2), (float) (start.Y + direction.Y * k2));
             return (pt1, pt2);
         }
 
-        public static double IsLeft(Vector2 p0, Vector2 p1, Vector2 target) 
+        public static double IsLeft(Vector2 p0, Vector2 p1, Vector2 target)
         {
-            return ((double)p1.X - p0.X) * ((double)target.Y - p0.Y) - ((double)target.X - p0.X) * ((double)p1.Y - p0.Y);
+            return ((double) p1.X - p0.X) * ((double) target.Y - p0.Y) - ((double) target.X - p0.X) * ((double) p1.Y - p0.Y);
         }
 
         public static double AngleBetween(double x0, double y0, double x1, double y1, bool ccw)
@@ -121,7 +121,7 @@ namespace NaturalNeighbor.Internal
                 result = result - Math.PI * 2.0;
             }
 
-            return (float)result;
+            return (float) result;
 
         }
 
@@ -135,8 +135,60 @@ namespace NaturalNeighbor.Internal
             return x0 * x1 + y0 * y1;
         }
 
+        public static bool IsPointInTriangle(Triangle triangle, Vector2 pt)
+        {
+            return 
+                IsLeft(triangle.P1, triangle.P2, pt) >= 0 &&
+                IsLeft(triangle.P2, triangle.P3, pt) >= 0 &&
+                IsLeft(triangle.P3, triangle.P1, pt) >= 0;
+        }
 
+        internal static double Lerp(IReadOnlyList<Vector3> points, Vector2 pt) 
+        {
+            switch (points.Count)
+            {
+                case 0: 
+                    return double.NaN;
+                case 1: 
+                    return points[0].Z;
+                case 2: 
+                    return Lerp2Pts(points[0], points[1], pt);
+                default: 
+                    return Lerp3Pts(points[0], points[1], points[2], pt);
+            }
+        }
 
+        private static double Lerp2Pts(Vector3 p1, Vector3 p2, Vector2 loc)
+        {
+            double dx = (double)p2.X - p1.X;
+            double dy = (double) p2.Y - p1.Y;
+
+            double dx1 = (double) loc.X - p1.X;
+            double dy1 = (double) loc.Y - p1.Y;
+
+            double mu1 = DotProduct(dx, dy, dx1, dy1);
+            double mu2 = DotProduct(dx, dy, dx, dy);
+
+            double t2 = mu1 / mu2;
+            double t1 = 1.0 - t2;
+
+            return t1 * p1.Z + t2 * p2.Z;
+        }
+
+        private static double Lerp3Pts(Vector3 p1, Vector3 p2, Vector3 p3, Vector2 loc)
+        {
+            // Using barycentric coordinates as explained in
+            // https://stackoverflow.com/questions/8697521/interpolation-of-a-triangle
+            // https://codeplea.com/triangular-interpolation
+            // https://en.wikipedia.org/wiki/Barycentric_coordinate_system
+
+            double det = ((double) p2.Y - p3.Y) * ((double) p1.X - p3.X) + ((double) p3.X - p2.X) * ((double) p1.Y - p3.Y);
+            double t1 = (((double) p2.Y - p3.Y) * ((double) loc.X - p3.X) + ((double) p3.X - p2.X) * ((double) loc.Y - p3.Y)) / det;
+            double t2 = (((double) p3.Y - p1.Y) * ((double) loc.X - p3.X) + ((double) p1.X - p3.X) * ((double) loc.Y - p3.Y)) / det;
+            double t3 = 1.0 - t1 - t2;
+
+            return t1 * p1.Z + t2 * p2.Z + t3 * p3.Z;
+        }
 
         public static SegmentIntersectionType CheckSegmentIntersection(Vector2 p0, Vector2 p1, Vector2 q0, Vector2 q1)
         {
