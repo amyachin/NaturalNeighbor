@@ -155,6 +155,7 @@ namespace NaturalNeighbor
                 return double.NaN;
             }
 
+
             switch (Method)
             {
                 case InterpolationMethod.Nearest:
@@ -191,11 +192,12 @@ namespace NaturalNeighbor
 
             (var triangle, var n1, var n2, var n3) = _impl.GetNearestTriangle();
 
+#if DEBUG
             if (!Utils.IsPointInTriangle(triangle, target))
             {
                 System.Diagnostics.Trace.WriteLine($"Point not  in triangle {target}");
             }
-
+#endif
 
             var points = new List<Vector3>(3);
             double z;
