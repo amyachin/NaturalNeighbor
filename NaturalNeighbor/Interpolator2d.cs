@@ -169,7 +169,7 @@ namespace NaturalNeighbor
 
 
         /// <summary>
-        /// Creates an initialized nearest neighbor interpolator
+        /// Creates an initialized interpolator
         /// </summary>
         /// <param name="points">coordinates on XY plane</param>
         /// <param name="heights">Z values</param>
@@ -184,7 +184,7 @@ namespace NaturalNeighbor
 
 
         /// <summary>
-        /// Creates an initialized nearest neighbor interpolator
+        /// Creates an initialized interpolator
         /// </summary>
         /// <param name="points">XYZ points</param>
         /// <returns>interpolator instance</returns>
@@ -194,7 +194,7 @@ namespace NaturalNeighbor
         }
 
         /// <summary>
-        /// Creates an initialized nearest neighbor interpolator
+        /// Creates an initialized interpolator
         /// </summary>
         /// <param name="points">XYZ points</param>
         /// <param name="margin">extrapolation margin</param>
@@ -222,11 +222,11 @@ namespace NaturalNeighbor
 
 
         /// <summary>
-        /// Creates an initialized nearest neighbor interpolator
+        /// Creates an initialized interpolator
         /// </summary>
         /// <param name="points">XYZ points</param>
-        /// <param name="minValue">The bottom left corner of the bounding box</param>
-        /// <param name="maxValue">The top right corner of the bounding box</param>
+        /// <param name="minValue">Bottom left corner of the bounding box</param>
+        /// <param name="maxValue">Top right corner of the bounding box</param>
         /// <returns>interpolator instance</returns>
         public static Interpolator2d Create(Vector3[] points, Vector2 minValue, Vector2 maxValue)
         {
@@ -251,9 +251,9 @@ namespace NaturalNeighbor
 
 
         /// <summary>
-        /// Creates an initialized nearest neighbor interpolator
+        /// Creates an initialized interpolator
         /// </summary>
-        /// <param name="points">coordinates on XY plane</param>
+        /// <param name="points">Coordinates on XY plane</param>
         /// <param name="heights">Z values</param>
         /// <returns>interpolator instance</returns>
         public static Interpolator2d Create(Vector2[] points, double[] heights)
@@ -265,12 +265,12 @@ namespace NaturalNeighbor
 
 
         /// <summary>
-        /// Creates an initialized nearest neighbor interpolator
+        /// Creates an initialized interpolator
         /// </summary>
         /// <param name="points">coordinates on XY plane</param>
         /// <param name="heights">Z values</param>
-        /// <param name="minValue">The bottom left corner of the bounding box</param>
-        /// <param name="maxValue">The top right corner of the bounding box</param>
+        /// <param name="minValue">Bottom left corner of the bounding box</param>
+        /// <param name="maxValue">Top right corner of the bounding box</param>
         /// <returns>interpolator instance</returns>
 
         public static Interpolator2d Create(Vector2[] points, double[] heights, Vector2 minValue, Vector2 maxValue)
@@ -297,7 +297,7 @@ namespace NaturalNeighbor
         /// <summary>
         ///  Computes interpolated Z value using the current <see cref="Method"/>
         /// </summary>
-        /// <param name="target"> A point on XY plane</param>
+        /// <param name="target">A point on XY plane</param>
         /// <returns>interpolated Z value</returns>
         public double Lookup(Vector2 target)
         {
