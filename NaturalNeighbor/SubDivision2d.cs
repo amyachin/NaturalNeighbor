@@ -22,7 +22,7 @@ namespace NaturalNeighbor
         /// <param name="margin">Margin for the bounding box</param>
         public SubDivision2d(Vector2[] points, double margin)
         {
-            Bounds bounds = Utils.CalculateBounds(points, margin, null, null);
+            Bounds bounds = Utils.CalculateBounds(points, (float)margin, null, null);
             _impl = new SubDiv2D_Mutable(bounds);
             InsertRange(points);
         }
@@ -37,13 +37,13 @@ namespace NaturalNeighbor
         }
 
         /// <summary>
-        /// Constructs an empty subdivision with boundaries
+        /// Constructs an empty subdivision with the specified boundaries
         /// </summary>
         /// <param name="min">the bottom left corner</param>
         /// <param name="max">the top right corner</param>
         public SubDivision2d(Vector2 min, Vector2 max)
         {
-            _impl = new SubDiv2D_Mutable(new Bounds(min.X, max.X, min.Y, max.Y));
+            _impl = new SubDiv2D_Mutable(new Bounds(min, max));
         }
 
         private SubDiv2D_Mutable _impl;
@@ -53,13 +53,13 @@ namespace NaturalNeighbor
         /// <summary>
         /// The bottom left corner of the bounding box
         /// </summary>
-        public Vector2 Min => _impl.Bounds.MinValue;
+        public Vector2 MinValue => _impl.Bounds.MinValue;
 
 
         /// <summary>
         /// The top right corner of the bounding box
         /// </summary>
-        public Vector2 Max => _impl.Bounds.MaxValue;
+        public Vector2 MaxValue => _impl.Bounds.MaxValue;
 
         /// <summary>
         /// Inserts a node into Delaunay graph 
@@ -106,7 +106,7 @@ namespace NaturalNeighbor
         }
 
         /// <summary>
-        /// Iterates through all delaunay triangles in the current node set
+        /// Reads delaunay triangles in the current node set
         /// </summary>
         /// <returns>list of triangles</returns>
 
@@ -116,7 +116,7 @@ namespace NaturalNeighbor
         }
 
         /// <summary>
-        /// Iterates through all edges of graph
+        /// Reads all edges of graph
         /// </summary>
         /// <returns>A list of endpoints forming an edge</returns>
         public IEnumerable<(Vector2, Vector2)> GetEdges()
@@ -126,10 +126,10 @@ namespace NaturalNeighbor
 
 
         /// <summary>
-        /// Finds a node closest to a specified location
+        /// Finds a node closest to the specified location
         /// </summary>
-        /// <param name="point">XY coordinate</param>
-        /// <param name="result">closest node location</param>
+        /// <param name="point">Location xy coordinate</param>
+        /// <param name="result">Closest node location</param>
         /// <returns> Found node Id, null if point is out of bounds</returns>
         public NodeId? FindNearest(Vector2 point, out Vector2 result)
         {
@@ -138,12 +138,12 @@ namespace NaturalNeighbor
 
 
         /// <summary>
-        /// Finds a node closest to a specified location
+        /// Finds a node closest to the specified location
         /// </summary>
-        /// <param name="x">X coordinate</param>
-        /// <param name="y">Y coordinate</param>
-        /// <param name="result">closest node location</param>
-        /// <returns>Found node Id, null if point is out of bounds</returns>
+        /// <param name="x">Location X coordinate</param>
+        /// <param name="y">Location Y coordinate</param>
+        /// <param name="result">Closest node location</param>
+        /// <returns>Id of the found node or null if point is out of bounds</returns>
         public NodeId? FindNearest(float x, float y, out Vector2 result)
         {
             return _impl.FindNearest(new Vector2(x, y), out result);
@@ -151,7 +151,7 @@ namespace NaturalNeighbor
 
 
         /// <summary>
-        /// Iterates through all voronoi facets
+        /// Reads all voronoi facets
         /// </summary>
         /// <returns>A list of facets</returns>
         public IEnumerable<VoronoiFacet> GetVoronoiFacets()
@@ -161,10 +161,10 @@ namespace NaturalNeighbor
 
 
         /// <summary>
-        /// Retrieves specific voronoi facets
+        /// Reads specific voronoi facets
         /// </summary>
-        /// <param name="vertices">facet node ids</param>
-        /// <returns>A list of facets</returns>
+        /// <param name="vertices">node ids</param>
+        /// <returns>A list of requested facets</returns>
         public IEnumerable<VoronoiFacet> GetVoronoiFacets(IReadOnlyList<NodeId> vertices)
         {
             return _impl.GetVoronoiFacets(vertices);

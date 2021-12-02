@@ -26,10 +26,10 @@ namespace NaturalNeighbor
 
 
         /// <summary>
-        /// Creates an empty interpolator with a specified bounding box
+        /// Creates an empty interpolator with the specified bounding box
         /// </summary>
-        /// <param name="minValue">New bottom left corner of the bounding box</param>
-        /// <param name="maxValue">New top right corner of the bounding box</param>
+        /// <param name="minValue">The bottom left corner of the bounding box</param>
+        /// <param name="maxValue">The top right corner of the bounding box</param>
         public Interpolator2d(Vector2 minValue, Vector2 maxValue)  
         {
             _zHeights = new Dictionary<NodeId, double>();
@@ -52,6 +52,7 @@ namespace NaturalNeighbor
         /// </summary>
         /// <param name="minValue">New bottom left corner of the bounding box</param>
         /// <param name="maxValue">New top right corner of the bounding box</param>
+        /// <remarks>Points outside of the new bounding box are deleted</remarks>
         public void SetBounds(Vector2 minValue, Vector2 maxValue)
         {
             if (_impl == null)
@@ -62,34 +63,30 @@ namespace NaturalNeighbor
             }
 
 
-            // Reconstruct existing tesselation using new boundaries
-
-            var bounds = _impl.Bounds;
-
-            float minX = Math.Min(minValue.X, bounds.MinValue.X);
-            float minY = Math.Min(minValue.Y, bounds.MinValue.Y);
-
-            float maxX = Math.Max(maxValue.X, bounds.MaxValue.X);
-            float maxY = Math.Max(maxValue.Y, bounds.MaxValue.Y);
-
-            bounds = new Bounds(minX, maxX, minY, maxY);
-
-            var newImpl = new SubDiv2D_Mutable(bounds);
+            // Reconstruct triangulation graph excluding points outside of the new boundaries
+            var newBounds = new Bounds(minValue, maxValue);
+            var newImpl = new SubDiv2D_Mutable(newBounds);
             var newZHeights = new Dictionary<NodeId, double>();
+
 
             foreach (var pair in _zHeights)
             {
                 var pt = _impl[pair.Key];
-                var newId = newImpl.Insert(pt);
-                newZHeights.Add(newId, pair.Value);
+                if (newBounds.Contains(pt))
+                {
+                    var newId = newImpl.Insert(pt);
+                    newZHeights.Add(newId, pair.Value);
+                }
             }
+
+            MinValue = minValue;
+            MaxValue = maxValue;
 
             _impl = newImpl;
             _zHeights = newZHeights;
             _snapshot = null;
             _facets = null;
         }
-
 
 
         /// <summary>
@@ -128,11 +125,11 @@ namespace NaturalNeighbor
                 throw new ArgumentOutOfRangeException("Points and heights lengths do not match.");
             }
 
-            var bounds = Utils.CalculateBounds(points, margin, MinValue, MaxValue);
-            GenerateCore(points, heights, bounds);
+            var bounds = Utils.CalculateBounds(points, (float)margin, MinValue, MaxValue);
+            GenerateCore(points, heights, bounds, checkBounds: false);
         }
 
-        private void GenerateCore(Vector2[] points, double[] heights, Bounds bounds)
+        private void GenerateCore(Vector2[] points, double[] heights, Bounds bounds, bool checkBounds)
         {
 
             if (points.Length != heights.Length)
@@ -140,11 +137,14 @@ namespace NaturalNeighbor
                 throw new ArgumentOutOfRangeException("Point array length does not match the heights array length.");
             }
 
-            for (int i = 0; i < points.Length; ++i)
+            if (checkBounds)
             {
-                if (!bounds.Contains(points[i]))
+                for (int i = 0; i < points.Length; ++i)
                 {
-                    throw new ArgumentOutOfRangeException($"points[{i}] is outside the specified boundaries.");
+                    if (!bounds.Contains(points[i]))
+                    {
+                        throw new ArgumentOutOfRangeException($"points[{i}] is out of bounds.");
+                    }
                 }
             }
 
@@ -154,7 +154,6 @@ namespace NaturalNeighbor
             _facets = null;
             
             _impl = new SubDiv2D_Mutable(bounds);
-
 
             // Generate delaunay graph for the specified points
             for (int i = 0; i < points.Length; ++i)
@@ -434,6 +433,11 @@ namespace NaturalNeighbor
         /// </summary>
         public float MinDistanceThreshold { get; set; }
 
+
+        /// <summary>
+        /// Number of samples used by the interpolator
+        /// </summary>
+        public int NumberOfSamples => _zHeights.Count;
 
 
         /// <summary>

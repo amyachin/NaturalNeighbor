@@ -34,7 +34,7 @@ namespace NaturalNeighbor.UnitTests
             var gridSpec = new GridSpec { OffsetX = -2.0f, OffsetY = -2.0f, Width = 4, Height = 4, Cols = 5, Rows = 5 };
             var grid = TestHelpers.CreateGrid(gridSpec);
             var subdivision = new SubDivision2d(grid.ToArray(), 0.2f); 
-            var foundNodeId = subdivision.FindNearest(new Vector2(subdivision.Min.X - 1000, subdivision.Max.Y + 1000), out var pt);
+            var foundNodeId = subdivision.FindNearest(new Vector2(subdivision.MinValue.X - 1000, subdivision.MaxValue.Y + 1000), out var pt);
             Assert.False(foundNodeId.HasValue);
         }
 

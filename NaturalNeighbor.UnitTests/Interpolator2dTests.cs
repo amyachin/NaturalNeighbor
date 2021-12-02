@@ -70,6 +70,29 @@ namespace NaturalNeighbor.UnitTests
 
 
         [Fact]
+        public void TestSetBounds()
+        {
+            var modelSpec = new GridSpec { OffsetX = -2, OffsetY = -2, Width = 4, Height = 4, Rows = 5, Cols = 5 };
+            var points = TestHelpers.CreateGrid(modelSpec).ToArray();
+            var heights = points.Select(it => SampleFunc(it.X, it.Y)).ToArray();
+
+            var interpolator = Interpolator2d.Create(points, heights);
+            Assert.Equal(25, interpolator.NumberOfSamples);
+
+            interpolator.SetBounds(new Vector2(-1.1f, -1.1f), new Vector2(1.1f, 1.1f));
+            Assert.Equal(9, interpolator.NumberOfSamples);
+
+            Assert.True(interpolator.MinValue.HasValue);
+            Assert.True(interpolator.MaxValue.HasValue);
+
+            Assert.Equal(-1.1f, interpolator.MinValue.Value.X);
+            Assert.Equal(-1.1f, interpolator.MinValue.Value.Y);
+            Assert.Equal(1.1f, interpolator.MaxValue.Value.X);
+            Assert.Equal(1.1f, interpolator.MaxValue.Value.Y);
+        }
+
+
+        [Fact]
         public void NaturalNeighborResidualError() 
         {
             var modelSpec = new GridSpec { OffsetX = -2, OffsetY = -2, Width = 4, Height = 4, Rows = 20, Cols = 20 };
