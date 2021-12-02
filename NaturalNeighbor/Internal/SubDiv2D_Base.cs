@@ -95,6 +95,9 @@ namespace NaturalNeighbor.Internal
         }
 
 
+        public Vector2 this[NodeId node] => GetVertexLocation((int)node);
+
+
         protected virtual void InvalidateGeometry()
         {
         }

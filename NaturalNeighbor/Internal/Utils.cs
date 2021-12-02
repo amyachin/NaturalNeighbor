@@ -5,7 +5,7 @@ namespace NaturalNeighbor.Internal
 {
     internal static class Utils
     {
-        public static Bounds CalculateBounds(IReadOnlyList<Vector2> points, double margin)
+        public static Bounds CalculateBounds(IReadOnlyList<Vector2> points, float margin, Vector2? minValue, Vector2? maxValue)
         {
             if (margin < 0.0)
             {
@@ -17,11 +17,11 @@ namespace NaturalNeighbor.Internal
                 throw new ArgumentOutOfRangeException(nameof(points), "Points collection cannot be empty.");
             }
 
-            double minX = float.MaxValue;
-            double minY = float.MaxValue;
+            float minX = float.MaxValue;
+            float minY = float.MaxValue;
 
-            double maxX = float.MinValue;
-            double maxY = float.MinValue;
+            float maxX = float.MinValue;
+            float maxY = float.MinValue;
 
             for (int i = 0; i < points.Count; ++i)
             {
@@ -34,7 +34,25 @@ namespace NaturalNeighbor.Internal
                 maxY = Math.Max(maxY, pt.Y);
             }
 
-            return new Bounds(minX - margin, maxX + margin, minY - margin, maxY + margin);
+            minX -= margin;
+            minY -= margin;
+            maxX += margin;
+            maxY += margin;
+
+
+            if (minValue.HasValue)
+            {
+                minX = Math.Min(minX, minValue.Value.X);
+                minY = Math.Min(minY, minValue.Value.Y);
+            }
+
+            if (maxValue.HasValue)
+            {
+                maxX = Math.Max(maxX, maxValue.Value.X);
+                maxY = Math.Max(maxY, maxValue.Value.Y);
+            }
+
+            return new Bounds(new Vector2(minX, minY), new Vector2(maxX, maxY));
         }
 
         internal static (double, double) GetCentroid(int startIndex, int count, IReadOnlyList<Vector2> polygon)

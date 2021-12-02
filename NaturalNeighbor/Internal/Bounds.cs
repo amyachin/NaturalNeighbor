@@ -9,10 +9,10 @@ namespace NaturalNeighbor.Internal
 {
     internal class Bounds
     {
-        public Bounds(double minX, double maxX, double minY, double maxY)
+        public Bounds(Vector2 minValue, Vector2 maxValue)
         {
-            MinValue = new Vector2((float)Math.Min(minX, maxX), (float)Math.Min(minY, maxY));
-            MaxValue = new Vector2((float)Math.Max(minX, maxX), (float)Math.Max(minY, maxY)); ;
+            MinValue = minValue;
+            MaxValue = maxValue;
         }
 
         public bool Contains(Vector2 point)
@@ -50,7 +50,7 @@ namespace NaturalNeighbor.Internal
             float maxX = Math.Max(left.MaxValue.X, right.MaxValue.X);
             float maxY = Math.Max(left.MaxValue.Y, right.MaxValue.Y);
 
-            return new Bounds(minX, maxX, minY, maxY);
+            return new Bounds(new Vector2(minX, minY), new Vector2(maxX, maxY));
         }
     }
 }
