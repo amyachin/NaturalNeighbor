@@ -300,31 +300,16 @@ namespace NaturalNeighbor
         /// <returns>interpolated Z value</returns>
         public double Lookup(Vector2 target)
         {
-
-            if (Method == InterpolationMethod.Natural)
-            {
-                InitSnapshot();
-            }
-
-            var vid = _impl.FindNearest(target, out var nearestVertexPt);
-
-            if (!vid.HasValue)
-            {
-                // Cannot interpolate the point - possibly out of bounds 
-                return double.NaN;
-            }
-
-
             switch (Method)
             {
                 case InterpolationMethod.Nearest:
-                    return _zHeights.TryGetValue(vid.Value, out var result) ? result : double.NaN;
+                    return LookupNearest(target);
 
                 case InterpolationMethod.Linear:
-                    return LookupLinear(target, vid.Value, nearestVertexPt);
+                    return LookupLinear(target);
 
                 case InterpolationMethod.Natural:
-                    return LookupNatural(target, vid.Value, nearestVertexPt);
+                    return LookupNatural(target);
 
                 default:
                     throw new InvalidOperationException($"Method not supported: {Method}.");
@@ -341,15 +326,24 @@ namespace NaturalNeighbor
             return dx * dx + dy * dy < minDistance2;
         }
 
-        private double LookupLinear(Vector2 target, NodeId nearestVertexId, Vector2 nearestVertexPt)
+        private double LookupLinear(Vector2 target)
         {
 
-            if (IsNearVertex(target, nearestVertexPt))
+            var locType = _impl.Locate(target, out var edge, out var vertex);
+
+            switch (locType)
             {
-                return _zHeights[nearestVertexId];
+                case PointLocationType.Vertex:
+                    return _zHeights.TryGetValue(new NodeId(vertex), out var retZ) ? retZ : double.NaN;
+
+                case PointLocationType.Error:
+                case PointLocationType.OutsideRect:
+                    return double.NaN;
             }
 
-            (var triangle, var n1, var n2, var n3) = _impl.GetNearestTriangle();
+            System.Diagnostics.Debug.Assert(edge != 0);
+
+            (var triangle, var n1, var n2, var n3) = _impl.GetTriangle(edge);
 
 #if DEBUG
             if (!Utils.IsPointInTriangle(triangle, target))
@@ -379,11 +373,20 @@ namespace NaturalNeighbor
             return Utils.Lerp(points, target); 
         }
 
-        private double LookupNatural(Vector2 target, NodeId nearestVertexId, Vector2 nearestVertexPt)
+        private double LookupNatural(Vector2 target)
         {
-            if (IsNearVertex(target, nearestVertexPt))
+
+            InitSnapshot();
+
+            var vid = _impl.FindNearest(target, out var pt);
+            if (!vid.HasValue)
             {
-                return _zHeights[nearestVertexId];
+                return double.NaN;
+            }
+
+            if (IsNearVertex(target, pt))
+            {
+                return _zHeights[vid.Value];
             }
 
             _snapshot.RecentEdge = _impl.RecentEdge;
@@ -418,6 +421,12 @@ namespace NaturalNeighbor
             return z * k;
         }
 
+        private double LookupNearest(Vector2 target)
+        {
+            var vid = _impl.FindNearest(target, out var _);
+            return vid.HasValue && _zHeights.TryGetValue(vid.Value, out var result) ? result : double.NaN;
+        }
+
 
         /// <summary>
         ///  Computes interpolated Z value using the current <see cref="Method"/>
@@ -426,6 +435,15 @@ namespace NaturalNeighbor
         /// <param name="y">y position </param>
         /// <returns>interpolated Z value</returns>
         public double Lookup(float x, float y) => Lookup(new Vector2(x, y));
+
+
+        /// <summary>
+        ///  Computes interpolated Z value using the current <see cref="Method"/>
+        /// </summary>
+        /// <param name="x">x position</param>
+        /// <param name="y">y position </param>
+        /// <returns>interpolated Z value</returns>
+        public double Lookup(double x, double y) => Lookup(new Vector2((float)x, (float) y));
 
 
         /// <summary>
