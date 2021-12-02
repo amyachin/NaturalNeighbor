@@ -240,10 +240,8 @@ namespace NaturalNeighbor.Internal
         }
 
 
-        public (Triangle, NodeId, NodeId, NodeId) GetNearestTriangle()
+        public (Triangle, NodeId, NodeId, NodeId) GetTriangle(int edge)
         {
-            var edge = this.RecentEdge;
-
             int edge1 = GetEdge(edge, TargetEdgeType.NEXT_AROUND_LEFT);
             int edge2 = GetEdge(edge1, TargetEdgeType.NEXT_AROUND_LEFT);
 

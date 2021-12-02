@@ -160,7 +160,7 @@ namespace NaturalNeighbor.Internal
 
         protected abstract int GetEdge(int edge, TargetEdgeType targetType);
 
-        protected PointLocationType Locate(Vector2 pt, out int prmEdge, out int prmVertex)
+        internal PointLocationType Locate(Vector2 pt, out int prmEdge, out int prmVertex)
         {
 
             var quadEdgesCount = GetQuadEdgesCount();

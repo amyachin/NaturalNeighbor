@@ -19,7 +19,7 @@ namespace NaturalNeighbor.Internal
                 edgeidx + 2,
                 edgeidx + 1);
 
-            pts = EmptyPts;
+            pts = Empty;
         }
 
         public ImmutableQuadEdgeData(ImmutableArray<int> next, ImmutableArray<int> pts) 
@@ -28,11 +28,10 @@ namespace NaturalNeighbor.Internal
             this.pts = pts;
         }
 
-        static readonly ImmutableArray<int> EmptyNext = ImmutableArray.Create(0, 0, 0, 0);
-        static readonly ImmutableArray<int> EmptyPts = ImmutableArray.Create(0, 0, 0, 0);
+        static readonly ImmutableArray<int> Empty = ImmutableArray.Create(0, 0, 0, 0);
 
 
-        public static readonly ImmutableQuadEdgeData Default = new ImmutableQuadEdgeData(EmptyNext, EmptyPts);
+        public static readonly ImmutableQuadEdgeData Default = new ImmutableQuadEdgeData(Empty, Empty);
 
 
         public bool IsFree => next[0] <= 0;
