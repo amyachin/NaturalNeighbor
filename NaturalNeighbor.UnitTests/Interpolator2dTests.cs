@@ -92,12 +92,13 @@ namespace NaturalNeighbor.UnitTests
         }
 
 
+
         [Fact]
-        public void NaturalNeighborResidualError() 
+        public void NaturalNeighborResidualError()
         {
             var modelSpec = new GridSpec { OffsetX = -2, OffsetY = -2, Width = 4, Height = 4, Rows = 20, Cols = 20 };
             var sampleSpec = new GridSpec { OffsetX = -2, OffsetY = -2, Width = 4, Height = 4, Rows = 50, Cols = 50 };
-            var sampleSpec2 = new GridSpec { OffsetX = -2, OffsetY = -2, Width = 4, Height = 4, Rows = 150, Cols = 150};
+            var sampleSpec2 = new GridSpec { OffsetX = -2, OffsetY = -2, Width = 4, Height = 4, Rows = 150, Cols = 150 };
 
             //var points = TestHelpers.CreateCircle(new Vector2(0, 0), 1.6f, 200).ToArray();
             var points = TestHelpers.CreateGrid(modelSpec).ToArray();
@@ -108,6 +109,53 @@ namespace NaturalNeighbor.UnitTests
 
             Assert.True(maxError < 0.02);
             Assert.True(stdError < 0.004);
+
+            var samplePoints = TestHelpers.CreateGrid(sampleSpec).ToArray();
+            Array.Reverse(samplePoints);
+
+            var values = new double[samplePoints.Length];
+
+            interpolator.LookupRange(samplePoints, values, new System.Threading.Tasks.ParallelOptions { });
+            Assert.DoesNotContain( values, double.IsNaN);
+
+
+            //TestHelpers.SaveGrid(@"C:\Work\matlab-Z-orig.csv", SampleFunc, modelSpec);
+
+            //interpolator.Method = InterpolationMethod.Nearest;
+            //TestHelpers.SaveGrid(@"C:\Work\matlab-Z-nearest.csv", (float x, float y) => interpolator.Lookup(x, y), sampleSpec2);
+
+            //interpolator.Method = InterpolationMethod.Linear;
+            //TestHelpers.SaveGrid(@"C:\Work\matlab-Z-linear.csv", (float x, float y) => interpolator.Lookup(x, y), sampleSpec2);
+
+            //interpolator.Method = InterpolationMethod.Natural;
+            //TestHelpers.SaveGrid(@"C:\Work\matlab-Z-natural.csv", (float x, float y) => interpolator.Lookup(x, y), sampleSpec2);
+
+        }
+
+        [Fact]
+        public void NaturalNeighborResidualErrorParallel()
+        {
+            var modelSpec = new GridSpec { OffsetX = -2, OffsetY = -2, Width = 4, Height = 4, Rows = 20, Cols = 20 };
+            var sampleSpec = new GridSpec { OffsetX = -2, OffsetY = -2, Width = 4, Height = 4, Rows = 50, Cols = 50 };
+            var sampleSpec2 = new GridSpec { OffsetX = -2, OffsetY = -2, Width = 4, Height = 4, Rows = 150, Cols = 150 };
+
+            //var points = TestHelpers.CreateCircle(new Vector2(0, 0), 1.6f, 200).ToArray();
+            var points = TestHelpers.CreateGrid(modelSpec).ToArray();
+            var heights = points.Select(it => SampleFunc(it.X, it.Y)).ToArray();
+            var interpolator = Interpolator2d.Create(points, heights, 0.5);
+
+
+            var samples = TestHelpers.CreateGrid(sampleSpec).ToArray();
+            var values = new double[samples.Length];
+
+            interpolator.LookupRange(samples, values, new System.Threading.Tasks.ParallelOptions { });
+            Assert.DoesNotContain(values, double.IsNaN);
+
+            TestHelpers.CalculateErrors(SampleFunc, samples, values, out var maxError, out var stdError);
+
+            Assert.True(maxError < 0.02);
+            Assert.True(stdError < 0.004);
+
 
             //TestHelpers.SaveGrid(@"C:\Work\matlab-Z-orig.csv", SampleFunc, modelSpec);
 

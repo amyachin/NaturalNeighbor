@@ -10,7 +10,7 @@ namespace NaturalNeighbor.Internal
     sealed class SubDiv2D_Mutable : SubDiv2D_Base
     {
 
-        public SubDiv2D_Mutable(Bounds bounds): base(bounds)
+        public SubDiv2D_Mutable(Bounds bounds) : base(bounds)
         {
             InitDelaunay();
         }
@@ -150,38 +150,286 @@ namespace NaturalNeighbor.Internal
             }
         }
 
-        public NodeId? FindNearest(Vector2 pt, out Vector2 nearestVertexPt)
+        public IEnumerable<NodeId> GetNodes()
+        {
+            for (int i = 4; i < _vertices.Count; ++i)
+            {
+                var v = _vertices[i];
+                if (v.IsVirtual || v.IsFree)
+                {
+                    continue;
+                }
+
+                yield return new NodeId(i);
+            }
+        }
+
+
+        public int GetFirstEdge(NodeId nodeId)
+        {
+            return _vertices[(int) nodeId].firstEdge;
+        }
+
+
+
+        public List<int> GetBowyerWatsonEnvelope(double x, double y, int locatorEdge)
+        {
+
+            if (locatorEdge == 0)
+            {
+                return null;
+            }
+
+            int v2 = EdgeDst(NextEdge(locatorEdge));
+
+            double h;
+            int c = locatorEdge;
+            var list = new List<int>();
+            var stack = new Stack<int>();
+
+            while (true)
+            {
+                int n0 = SymEdge(c);
+                int n1 = GetEdge(n0, TargetEdgeType.NEXT_AROUND_LEFT);
+
+                // nInCircle++
+                EdgeOrg(n0, out var p1);
+                EdgeOrg(n1, out var p2);
+                EdgeDst(n1, out var p3);
+
+
+                double a11 = p1.X - x;
+                double a21 = p2.X - x;
+                double a31 = p3.X - x;
+
+                double a12 = p1.Y - y;
+                double a22 = p2.Y - y;
+                double a32 = p3.Y - y;
+
+                h = (a11 * a11 + a12 * a12) * (a21 * a32 - a31 * a22)
+                    + (a21 * a21 + a22 * a22) * (a31 * a12 - a11 * a32)
+                    + (a31 * a31 + a32 * a32) * (a11 * a22 - a21 * a12);
+
+
+                if (h >= 0)
+                {
+                    // The vertex is within the circumcircle the associated
+                    // triangle.  The Thiessen triangle will extend to include
+                    // that triangle and, perhaps, its neighbors.
+                    // So continue the search.
+                    stack.Push(n0);
+                    c = n1;
+                }
+                else
+                {
+                    if (list.Count > 0 && list[0] == c)
+                    {
+                        throw new InvalidOperationException("Infininte loop detected.");
+                    }
+
+                    list.Add(c);
+                    c = GetEdge(c, TargetEdgeType.NEXT_AROUND_LEFT);
+
+                    if (stack.Count > 0)
+                    {
+                        var p = stack.Peek();
+                        while (c == p)
+                        {
+                            stack.Pop();
+                            c = GetEdge(SymEdge(c), TargetEdgeType.NEXT_AROUND_LEFT);
+
+                            if (stack.Count == 0)
+                            {
+                                break;
+                            }
+
+                            p = stack.Peek();
+                        }
+                    }
+
+                    if (c == locatorEdge)
+                    {
+                        break;
+                    }
+                }
+            }
+
+            //DumpEnvelope(list, x, y);
+
+            return list;
+        }
+
+        //private void DumpEnvelope(List<int> list, double x, double y)
+        //{
+
+        //    System.Text.StringBuilder sb = new System.Text.StringBuilder();
+        //    sb.AppendLine($"Enevelope({x}\ty={y})");
+
+        //    for (int i = 0; i < list.Count; ++i)
+        //    {
+        //        EdgeOrg(list[i], out var pt);
+        //        sb.AppendLine($"p[{i}]\t{pt.X}\t{pt.Y}");
+        //    }
+
+        //    Trace.Write(sb.ToString());
+        //}
+
+        public double[] GetBarycentricCoordinates(List<int> envelope, double x, double y)
+        {
+            double[] weights = new double[envelope.Count];
+
+            var c0 = default(Circumcircle);
+            var c1 = default(Circumcircle);
+            var c2 = default(Circumcircle);
+            var c3 = default(Circumcircle);
+
+            double wSum = 0;
+
+            for (int i0 = 0, nEdge = envelope.Count; i0 < nEdge; i0++)
+            {
+                int i1 = (i0 + 1) % nEdge; // next index
+
+                var e0 = envelope[i0];
+                var e1 = envelope[i1];
+
+                EdgeOrg(e0, out var a);
+                var currNode = EdgeOrg(e1, out var b); // Same as EdgeDst(e0)
+                EdgeDst(e1, out var c);
+
+
+                double ax = a.X - x;
+                double ay = a.Y - y;
+                double bx = b.X - x;
+                double by = b.Y - y;
+                double cx = c.X - x;
+                double cy = c.Y - y;
+
+
+                double x0 = (ax + bx) * 0.5;
+                double y0 = (ay + by) * 0.5;
+                double x1 = (bx + cx) * 0.5;
+                double y1 = (by + cy) * 0.5;
+
+                // for the first edge processed, the code needs to initialize values
+                // for c0 and c3.  But after that, the code can reuse values from
+                // the previous calculation.
+
+                if (i0 == 0)
+                {
+                    c0 = Utils.ComputeCurcumcircle(ax, ay, bx, by, 0, 0);
+                    EdgeDst(GetEdge(e0, TargetEdgeType.NEXT_AROUND_LEFT), out var pt);
+                    c3 = Utils.ComputeCurcumcircle(ax, ay, bx, by, pt.X - x, pt.Y - y);
+                }
+                else
+                {
+                    c0 = c1;
+                }
+
+                c1 = Utils.ComputeCurcumcircle(bx, by, cx, cy, 0, 0);
+
+                // Skip non-contributing nodes from the weight calculation
+                if (currNode >= 4)
+                {
+
+                    // compute the reduced "component area" of the Theissen polygon
+                    // constructed around point B, the second point of edge[i0].
+                    double wXY = (x0 * c0.CenterY - c0.CenterX * y0)
+                      + (c0.CenterX * c1.CenterY - c1.CenterX * c0.CenterY)
+                      + (c1.CenterX * y1 - x1 * c1.CenterY);
+
+
+                    // compute the full "component area" of the Theissen polygon
+                    // constructed around point B, the second point of edge[i0]
+                    var n = GetEdge(e0, TargetEdgeType.NEXT_AROUND_LEFT);
+                    double wThiessen = x0 * c3.CenterY - c3.CenterX * y0;
+
+                    while (n != e1)
+                    {
+                        var n1 = SymEdge(n);
+                        n = GetEdge(n1, TargetEdgeType.NEXT_AROUND_LEFT);
+                        c2 = c3;
+
+                        EdgeOrg(n1, out a);
+                        EdgeOrg(n, out b); // Same As EdgeDst(n1))
+                        EdgeDst(n, out c);
+
+
+                        ax = a.X - x;
+                        ay = a.Y - y;
+                        bx = b.X - x;
+                        by = b.Y - y;
+                        cx = c.X - x;
+                        cy = c.Y - y;
+
+                        c3 = Utils.ComputeCurcumcircle(ax, ay, bx, by, cx, cy);
+                        wThiessen += c2.CenterX * c3.CenterY - c3.CenterX * c2.CenterY;
+                    }
+
+                    wThiessen += c3.CenterX * y1 - x1 * c3.CenterY;
+
+
+
+
+                    // Compute wDelta, the amount of area that the Theissen polygon
+                    // constructed around vertex B would yield to an insertion at
+                    // the query point.
+                    //    for convenience, both the wXY and wThiessen weights were
+                    // computed in a clockwise order, which means they are the
+                    // negative of what we need for the weight computation, so
+                    // negate them and  -(wTheissen-wXY) becomes wXY-wTheissen
+                    // Also, there would normally be a divide by 2 factor from the
+                    // shoelace area formula, but that is ommitted because it will
+                    // drop out when we unitize the sum of the set of the weights.
+
+                    double wDelta = wXY - wThiessen;
+                    wSum += wDelta;
+                    weights[i1] = wDelta;
+                }
+            }
+
+            // Normalize the weights
+            for (int i = 0; i < weights.Length; ++i)
+            {
+                weights[i] /= wSum;
+            }
+
+            return weights;
+        }
+
+        public NodeId EdgeOrigin(int edge) => new NodeId(EdgeOrg(edge));
+
+        public NodeId EdgeDestination(int edge) => new NodeId(EdgeDst(edge));
+
+        public NodeId? FindNearest(Vector2 pt, SearchContext context, out Vector2 nearestVertexPt)
         {
             if (!_validGeometry)
             {
                 CalcVoronoi();
             }
 
-            nearestVertexPt = default(Vector2);
 
             // Find the closest delaunay triangle (one of it's corners)
-            var loc = Locate(pt, out var edge, out var vertex);
+            var loc = Locate(pt, context);
 
-
+            if (loc == PointLocationType.Vertex)
+            {
+                nearestVertexPt = _vertices[context.Vertex].pt;
+                return new NodeId(context.Vertex);
+            }
 
             if (loc != PointLocationType.Edge && loc != PointLocationType.Inside)
             {
-                if (loc == PointLocationType.Vertex)
-                {
-                    nearestVertexPt = _vertices[vertex].pt;
-                    return new NodeId(vertex);
-                }
-
+                nearestVertexPt = default(Vector2);
                 return null;
             }
 
-            vertex = 0;
+            int vertex = 0;
 
-            EdgeOrg(edge, out var start);
+            EdgeOrg(context.Edge, out var start);
             Vector2 diff = pt - start;
 
             // Switch to voronoi space
-            edge = RotateEdge(edge, 1);
+            int edge = RotateEdge(context.Edge, 1);
             int total = _vertices.Count;
 
             for (int i = 0; i < total; ++i)
@@ -234,11 +482,11 @@ namespace NaturalNeighbor.Internal
 
             else
             {
+                nearestVertexPt = default(Vector2);
                 return null;
             }
 
         }
-
 
         public (Triangle, NodeId, NodeId, NodeId) GetTriangle(int edge)
         {
@@ -256,7 +504,7 @@ namespace NaturalNeighbor.Internal
         {
             var vertices = this._vertices.Select((it, idx) => new KeyValuePair<int, ImmutableVertexData>(idx, new ImmutableVertexData(it.pt, it.type, it.firstEdge)));
             var quadEdges = this._quadEdges.Select((it, idx) => new KeyValuePair<int, ImmutableQuadEdgeData>(idx, new ImmutableQuadEdgeData(next: ImmutableArray.CreateRange(it.next), pts: ImmutableArray.CreateRange(it.pts))));
-            return new SubDiv2D_Immutable(this.Bounds,  vertices.ToImmutableDictionary(), quadEdges.ToImmutableDictionary(), recentEdge: RecentEdge); 
+            return new SubDiv2D_Immutable(this.Bounds, vertices.ToImmutableDictionary(), quadEdges.ToImmutableDictionary());
         }
 
         private void ClearVoronoi()
@@ -280,8 +528,7 @@ namespace NaturalNeighbor.Internal
 
             _validGeometry = false;
         }
-
-        private void CalcVoronoi()
+        internal void CalcVoronoi()
         {
             if (_validGeometry)
             {
@@ -355,13 +602,10 @@ namespace NaturalNeighbor.Internal
         private int _freePoint;
         private bool _validGeometry;
 
-
         private void InitDelaunay()
         {
             _vertices.Clear();
             _quadEdges.Clear();
-
-            RecentEdge = 0;
             _validGeometry = false;
 
             float rx = Bounds.MinValue.X;
@@ -394,9 +638,8 @@ namespace NaturalNeighbor.Internal
             Splice(edge_AB, SymEdge(edge_CA));
             Splice(edge_BC, SymEdge(edge_AB));
             Splice(edge_CA, SymEdge(edge_BC));
-
-            RecentEdge = edge_AB;
         }
+
 
         protected override int EdgeDst(int edge)
         {
@@ -425,7 +668,7 @@ namespace NaturalNeighbor.Internal
 
         protected override int NextEdge(int edge)
         {
-            var result =  _quadEdges[edge >> 2].next[edge & 3];
+            var result = _quadEdges[edge >> 2].next[edge & 3];
             return result;
         }
 
@@ -562,6 +805,28 @@ namespace NaturalNeighbor.Internal
 
             public readonly int[] next = new int[4];
             public readonly int[] pts = new int[4];
+        }
+    }
+
+
+    internal class SearchContext
+    {
+        const int DEFAULT_EDGE_ID = 4;
+        
+        public int RecentEdge { get; set; }
+        public int Edge{ get; set; }
+        public int Vertex { get; set; }
+
+        public SearchContext()
+        {
+            Clear();
+        }
+
+        public void Clear()
+        {
+            RecentEdge = DEFAULT_EDGE_ID;
+            Edge = 0;
+            Vertex = 0;
         }
     }
 }

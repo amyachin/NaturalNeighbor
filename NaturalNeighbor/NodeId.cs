@@ -33,6 +33,8 @@ namespace NaturalNeighbor
             return $"NodeId={_value}";
         }
 
+        internal bool IsSentinel => _value < 4;
+
         readonly int _value;
     }
 

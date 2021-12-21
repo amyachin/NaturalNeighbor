@@ -176,6 +176,7 @@ namespace NaturalNeighbor.Internal
             }
         }
 
+
         private static double Lerp2Pts(Vector3 p1, Vector3 p2, Vector2 loc)
         {
             double dx = (double)p2.X - p1.X;
@@ -342,6 +343,42 @@ namespace NaturalNeighbor.Internal
             return new Vector2(float.MaxValue, float.MaxValue);
         }
 
+        internal static Circumcircle ComputeCurcumcircle(double vax, double vay, double vbx, double vby, double vcx, double vcy)
+        {
+            // In order to reduce the magnitude of terms, remap the
+            // coordinate system using (vax, vay) as the origin.
+            double bx = vbx - vax;
+            double by = vby - vay;
+            double cx = vcx - vax;
+            double cy = vcy - vay;
+
+            double d = (bx * cy - by * cx) * 2;
+
+            double b2 = bx * bx + by * by;
+            double c2 = cx * cx + cy * cy;
+            double x = (cy * b2 - by * c2) / d;
+            double y = (bx * c2 - cx * b2) / d;
+
+            return new Circumcircle(x + vax, y + vay, x * x + y * y);
+        }
+    }
+
+    struct Circumcircle
+    {
+        public Circumcircle(double x, double y, double radiusSquared)
+        {
+            CenterX = x;
+            CenterY = y;
+            RadiusSquared = radiusSquared;
+        }
+
+        public double CenterX { get; }
+
+        public double CenterY { get; }
+
+        public double RadiusSquared { get; }
+
+        public double Radius => Math.Sqrt(RadiusSquared);
     }
 
     internal enum SegmentIntersectionType
