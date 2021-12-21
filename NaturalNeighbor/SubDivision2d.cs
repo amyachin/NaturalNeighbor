@@ -24,8 +24,13 @@ namespace NaturalNeighbor
         {
             Bounds bounds = Utils.CalculateBounds(points, (float)margin, null, null);
             _impl = new SubDiv2D_Mutable(bounds);
+            _searchContext = new SearchContext();
             InsertRange(points);
         }
+
+        internal int NumberOfSamples { get; private set; }
+
+        private SearchContext _searchContext;
 
         /// <summary>
         /// Constructs a new subdivision including the specified points
@@ -44,9 +49,10 @@ namespace NaturalNeighbor
         public SubDivision2d(Vector2 min, Vector2 max)
         {
             _impl = new SubDiv2D_Mutable(new Bounds(min, max));
+            _searchContext = new SearchContext();
         }
 
-        private SubDiv2D_Mutable _impl;
+        internal SubDiv2D_Mutable _impl;
 
 
 
@@ -68,7 +74,7 @@ namespace NaturalNeighbor
         /// <returns>node Id</returns>
         public NodeId Insert(Vector2 point)
         {
-            return _impl.Insert(point);
+            return _impl.Insert(point, _searchContext);
         }
 
         /// <summary>
@@ -79,7 +85,14 @@ namespace NaturalNeighbor
         /// <returns>node Id</returns>
         public NodeId Insert(float x, float y)
         {
-            return _impl.Insert(new Vector2(x, y));
+
+            var result = _impl.Insert(new Vector2(x, y), _searchContext);
+            if (_searchContext.Vertex == 0)
+            {
+                NumberOfSamples++;
+            }
+
+            return result;
         }
 
         /// <summary>
@@ -90,7 +103,11 @@ namespace NaturalNeighbor
         {
             foreach (var p in points) 
             {
-                _impl.Insert(p);
+                _impl.Insert(p, _searchContext);
+                if (_searchContext.Vertex == 0)
+                {
+                    NumberOfSamples++;
+                }
             }
         }
 
@@ -103,6 +120,8 @@ namespace NaturalNeighbor
         {
             var bounds = _impl.Bounds;
             _impl = new SubDiv2D_Mutable(bounds);
+            _searchContext.Clear();
+            NumberOfSamples = 0;
         }
 
         /// <summary>
@@ -133,7 +152,7 @@ namespace NaturalNeighbor
         /// <returns> Found node Id, null if point is out of bounds</returns>
         public NodeId? FindNearest(Vector2 point, out Vector2 result)
         {
-            return _impl.FindNearest(point, out result);
+            return _impl.FindNearest(point, _searchContext, out result);
         }
 
 
@@ -146,7 +165,7 @@ namespace NaturalNeighbor
         /// <returns>Id of the found node or null if point is out of bounds</returns>
         public NodeId? FindNearest(float x, float y, out Vector2 result)
         {
-            return _impl.FindNearest(new Vector2(x, y), out result);
+            return _impl.FindNearest(new Vector2(x, y), _searchContext, out result);
         }
 
 

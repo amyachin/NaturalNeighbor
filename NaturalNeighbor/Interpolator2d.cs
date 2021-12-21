@@ -8,11 +8,13 @@ namespace NaturalNeighbor
 {
     using Internal;
 
+    using System.Threading.Tasks;
+
 
     /// <summary>
     /// Spatial interpolation based on Voronoi tesellation (by Robin Sibson). Provides a smoother approximation compared to nearest neighbor.
     /// </summary>
-    public class Interpolator2d
+    public class Interpolator2d : ISharedMethods
     {
 
         /// <summary>
@@ -20,8 +22,25 @@ namespace NaturalNeighbor
         /// </summary>
         public Interpolator2d()
         {
-            _zHeights = new Dictionary<NodeId, double>();
-            Method = InterpolationMethod.Natural;
+            _nodeEvaluator = DefaultNodeEvaluator;
+            _sharedContext = new SearchContext();
+            SetMethod(InterpolationMethod.Natural);
+        }
+
+        static readonly Func<NodeId, double> DefaultNodeEvaluator = _ => double.NaN;
+
+
+        private Func<NodeId, double> _nodeEvaluator;
+
+        private void InitFromSource(SubDivision2d source, Func<NodeId, double> nodeEvaluator)
+        {
+            _nodeEvaluator = nodeEvaluator;
+            _impl = source._impl;
+            _sharedContext.Clear();
+
+            this.MinValue = source.MinValue;
+            this.MaxValue = source.MaxValue;
+            this.NumberOfSamples = source.NumberOfSamples;
         }
 
 
@@ -30,10 +49,8 @@ namespace NaturalNeighbor
         /// </summary>
         /// <param name="minValue">The bottom left corner of the bounding box</param>
         /// <param name="maxValue">The top right corner of the bounding box</param>
-        public Interpolator2d(Vector2 minValue, Vector2 maxValue)  
+        public Interpolator2d(Vector2 minValue, Vector2 maxValue): this()  
         {
-            _zHeights = new Dictionary<NodeId, double>();
-            Method = InterpolationMethod.Natural;
             SetBounds(minValue, maxValue);
         }
 
@@ -66,26 +83,32 @@ namespace NaturalNeighbor
             // Reconstruct triangulation graph excluding points outside of the new boundaries
             var newBounds = new Bounds(minValue, maxValue);
             var newImpl = new SubDiv2D_Mutable(newBounds);
-            var newZHeights = new Dictionary<NodeId, double>();
+            var map = new Dictionary<NodeId, double>();
+
+            _sharedContext.Clear();
 
 
-            foreach (var pair in _zHeights)
+            foreach (var nodeId in _impl.GetNodes())
             {
-                var pt = _impl[pair.Key];
+                var pt = _impl[nodeId];
                 if (newBounds.Contains(pt))
                 {
-                    var newId = newImpl.Insert(pt);
-                    newZHeights.Add(newId, pair.Value);
+                    var z = _nodeEvaluator(nodeId);
+                    if (!double.IsNaN(z))
+                    {
+                        var newId = newImpl.Insert(pt, _sharedContext);
+                        map.Add(newId, z);
+                    }
                 }
+
             }
 
             MinValue = minValue;
             MaxValue = maxValue;
 
             _impl = newImpl;
-            _zHeights = newZHeights;
-            _snapshot = null;
-            _facets = null;
+            _nodeEvaluator = CreateNodeEvaluator(map);
+            NumberOfSamples = map.Count;
         }
 
 
@@ -148,22 +171,34 @@ namespace NaturalNeighbor
                 }
             }
 
+
             // Initialize 
-            _zHeights.Clear();
-            _snapshot = null;
-            _facets = null;
-            
+            var map = new Dictionary<NodeId, double>(heights.Length); 
+
+            _voronoiReady = false;
             _impl = new SubDiv2D_Mutable(bounds);
+            _nodeEvaluator = CreateNodeEvaluator(map);
+
 
             // Generate delaunay graph for the specified points
             for (int i = 0; i < points.Length; ++i)
             {
-                var id = _impl.Insert(points[i]);
-                _zHeights.Add(id, heights[i]);
+                var id = _impl.Insert(points[i], _sharedContext);
+                if (_sharedContext.Vertex == 0)
+                {
+                    map.Add(id, heights[i]);
+                }
             }
 
             MinValue = bounds.MinValue;
             MaxValue = bounds.MaxValue;
+            NumberOfSamples = map.Count;
+
+        }
+
+        static Func<NodeId, double> CreateNodeEvaluator(IDictionary<NodeId, double> map) 
+        {
+            return id => map.TryGetValue(id, out var z) ? z : double.NaN;
         }
 
 
@@ -279,19 +314,49 @@ namespace NaturalNeighbor
             return interpolator;
         }
 
-
-
-        private void InitSnapshot()
+        /// <summary>
+        /// Creates an initialized interpolator
+        /// </summary>
+        /// <param name="source">Source subdivision</param>
+        /// <param name="nodeEvaluator">node evaluator</param>
+        /// <returns>interpolator instance</returns>
+        public static Interpolator2d Create(SubDivision2d source, Func<NodeId, double> nodeEvaluator)
         {
-            if (_snapshot != null)
+            if (source == null)
             {
-                return;
+                throw new ArgumentNullException(nameof(source));
             }
 
-            _snapshot = _impl.ToImmutable();
-            _facets = _impl.GetVoronoiFacets().ToDictionary(it => it.Id);
+            if (nodeEvaluator == null)
+            {
+                throw new ArgumentNullException(nameof(nodeEvaluator));
+            }
+
+            var interpolator = new Interpolator2d();
+            interpolator.InitFromSource(source, nodeEvaluator);
+            return interpolator;
         }
 
+        private void EnsureVoronoi()
+        {
+            if (_voronoiReady == false)
+            {
+                lock (_syncRoot)
+                {
+                    if (_voronoiReady)
+                    {
+                        return;
+                    }
+
+                    _impl.CalcVoronoi();
+                    _voronoiReady = true;
+                }
+            }
+        }
+
+        private bool _voronoiReady;
+
+        private readonly object _syncRoot = new object();
 
         /// <summary>
         ///  Computes interpolated Z value using the current <see cref="Method"/>
@@ -300,23 +365,159 @@ namespace NaturalNeighbor
         /// <returns>interpolated Z value</returns>
         public double Lookup(Vector2 target)
         {
-            switch (Method)
+            CheckInitialized();
+            return _evaluator.Evaluate(target.X, target.Y);
+        }
+
+
+        /// <summary>
+        /// Computes interpolated Z values for the specified locations
+        /// </summary>
+        /// <param name="points">XY coordinates for interpolation</param>
+        /// <param name="values">Array recieving the interpolation results.  Must be with the same length as points</param>
+        /// <param name="parallelOptions">parallel options, see <see cref="ParallelOptions"/> for details</param>
+        public void LookupRange(Vector2[] points, double[] values, ParallelOptions parallelOptions)
+        {
+            if (points == null)
             {
-                case InterpolationMethod.Nearest:
-                    return LookupNearest(target);
-
-                case InterpolationMethod.Linear:
-                    return LookupLinear(target);
-
-                case InterpolationMethod.Natural:
-                    return LookupNatural(target);
-
-                default:
-                    throw new InvalidOperationException($"Method not supported: {Method}.");
-
+                throw new ArgumentNullException(nameof(points));
             }
 
+            if (values == null)
+            {
+                throw new ArgumentNullException(nameof(values));
+            }
+
+            if (points.Length != values.Length)
+            {
+                throw new ArgumentException("Points and values array lengths dont match.");
+            }
+
+            CheckInitialized();
+
+            if (Method == InterpolationMethod.Nearest)
+            {
+                EnsureVoronoi();
+            }
+
+            Parallel.For
+            (
+                0,
+                points.Length,
+                parallelOptions: parallelOptions,
+                localInit: () => _evaluator.Clone(),
+                localFinally: _ => { },
+                body: (index, state, evaluator) =>
+                {
+                    var pt = points[index];
+                    values[index] = evaluator.Evaluate(pt.X, pt.Y);
+                    return evaluator;
+                }
+           ); 
         }
+
+        /// <summary>
+        /// Computes interpolated Z values for the specified locations
+        /// </summary>
+        /// <param name="points"></param>
+        /// <param name="values"></param>
+        /// <remarks>Single thread execution. For parallel execution use <see cref="LookupRange(Vector2[], double[], ParallelOptions)"/> </remarks>
+        public void LookupRange(Vector2[] points, double[] values) 
+        {
+            LookupRange(points, values, new ParallelOptions { MaxDegreeOfParallelism = 1 });
+        }
+
+
+        /// <summary>
+        /// Computes interpolated Z values for the specified locations
+        /// </summary>
+        /// <param name="x">X coordinates for interpolation</param>
+        /// <param name="y">Y coordinates for interpolation</param>
+        /// <param name="values">Array recieving the interpolation results.  Must be with the same length as x and y </param>
+        /// <param name="parallelOptions">parallel options, see <see cref="ParallelOptions"/> for details/></param>
+        public void LookupRange(float[] x, float[] y, double[] values, ParallelOptions parallelOptions)
+        {
+
+            CheckInitialized();
+
+            if (Method == InterpolationMethod.Nearest)
+            {
+                EnsureVoronoi();
+            }
+
+            Parallel.For
+            (
+              0,
+              x.Length,
+              parallelOptions: parallelOptions,
+              localInit: () => _evaluator.Clone(),
+              localFinally: _ => { },
+              body: (index, state, evaluator) =>
+              {
+                  values[index] = evaluator.Evaluate(x[index], y[index]);
+                  return evaluator;
+              }
+            );
+        }
+
+
+        /// <summary>
+        /// Computes interpolated Z values for the specified locations
+        /// </summary>
+        /// <param name="x">X coordinates for interpolation</param>
+        /// <param name="y">Y coordinates for interpolation</param>
+        /// <param name="values">Array recieving the interpolation results.  Must be with the same length as x and y </param>
+        /// <remarks>Single thread execution. For parallel execution use <see cref="LookupRange(float[], float[], double[], ParallelOptions)"/> </remarks>
+        public void LookupRange(float[] x, float[] y, double[] values) 
+        {
+            LookupRange(x, y, values, new ParallelOptions { MaxDegreeOfParallelism = 1 });
+        }
+
+
+        internal List<int> CreateReferenceEnvelope(double x, double y)
+        {
+            CheckInitialized();
+
+            SubDiv2D_Immutable immutable = _impl.ToImmutable();
+            return SubDiv2D_Immutable.CreateEnvelope(immutable, _sharedContext, new Vector2((float) x, (float) y));
+        }
+
+        internal List<int> CreateEnvelope(double x, double y)
+        {
+            CheckInitialized();
+
+            var locType = _impl.Locate(new Vector2((float) x, (float) y), _sharedContext);
+
+            if (locType == PointLocationType.Edge || locType == PointLocationType.Inside)
+            {
+                return _impl.GetBowyerWatsonEnvelope(x, y, _sharedContext.Edge);
+            }
+            else
+            {
+                return null;
+            }
+        }
+
+        private void CheckInitialized()
+        {
+            if (_impl == null)
+            {
+                throw new InvalidOperationException("Iterator is not initialized.");
+            }
+        }
+
+        internal (NodeId, Vector2) GetEdgeOrigin(int edge)
+        {
+            var nodeID = _impl.EdgeOrigin(edge);
+            return (nodeID, _impl[nodeID]);
+        }
+
+        internal (NodeId, Vector2) GetEdgeDestination(int edge)
+        {
+            var nodeID = _impl.EdgeDestination(edge);
+            return (nodeID, _impl[nodeID]);
+        }
+
 
         bool IsNearVertex(Vector2 target, Vector2 nearestVertexPt)
         {
@@ -326,20 +527,23 @@ namespace NaturalNeighbor
             return dx * dx + dy * dy < minDistance2;
         }
 
-        private double LookupLinear(Vector2 target)
+        double ISharedMethods.LookupLinear(double x, double y, SearchContext context)
         {
+            var target = new Vector2((float) x, (float) y);
 
-            var locType = _impl.Locate(target, out var edge, out var vertex);
+            var locType = _impl.Locate(target, context);
 
             switch (locType)
             {
                 case PointLocationType.Vertex:
-                    return _zHeights.TryGetValue(new NodeId(vertex), out var retZ) ? retZ : double.NaN;
+                    return _nodeEvaluator(new NodeId(context.Vertex));
 
                 case PointLocationType.Error:
                 case PointLocationType.OutsideRect:
                     return double.NaN;
             }
+
+            var edge = context.Edge;
 
             System.Diagnostics.Debug.Assert(edge != 0);
 
@@ -348,102 +552,162 @@ namespace NaturalNeighbor
 #if DEBUG
             if (!Utils.IsPointInTriangle(triangle, target))
             {
-                System.Diagnostics.Trace.WriteLine($"Point not  in triangle {target}");
+                System.Diagnostics.Trace.WriteLine($"Point not in the triangle {target}");
             }
 #endif
 
             var points = new List<Vector3>(3);
-            double z;
 
-            if (_zHeights.TryGetValue(n1, out z))
+            if ( !n1.IsSentinel)
             {
-                points.Add(new Vector3(triangle.P1, (float) z));
+                double z = _nodeEvaluator(n1);
+
+                if (!double.IsNaN(z))
+                {
+                    points.Add(new Vector3(triangle.P1, (float) z));
+                }
             }
 
-            if (_zHeights.TryGetValue(n2, out z))
+            if (!n2.IsSentinel)
             {
-                points.Add(new Vector3(triangle.P2, (float) z));
+                double z = _nodeEvaluator(n2);
+                if (!double.IsNaN(z))
+                {
+                    points.Add(new Vector3(triangle.P2, (float) z));
+                }
             }
 
-            if (_zHeights.TryGetValue(n3, out z))
+            if (!n3.IsSentinel)
             {
-                points.Add(new Vector3(triangle.P3, (float) z));
+                double z = _nodeEvaluator(n3);
+                if (!double.IsNaN(z))
+                {
+                    points.Add(new Vector3(triangle.P3, (float) z));
+                }
             }
 
             return Utils.Lerp(points, target); 
         }
 
-        private double LookupNatural(Vector2 target)
+        double ISharedMethods.LookupNearest(double x, double y, SearchContext context)
+        {
+            EnsureVoronoi();
+
+            var vid = _impl.FindNearest(new Vector2((float) x, (float) y), context, out var _);
+            return vid.HasValue ? _nodeEvaluator(vid.Value) : double.NaN;
+        }
+
+        double ISharedMethods.LookupNatural(double x, double y, SearchContext context)
         {
 
-            InitSnapshot();
+            var target = new Vector2((float) x, (float) y);
 
-            var vid = _impl.FindNearest(target, out var pt);
-            if (!vid.HasValue)
+            var locationType = _impl.Locate(target, context);
+
+            if (locationType == PointLocationType.Error || locationType == PointLocationType.OutsideRect)
             {
                 return double.NaN;
             }
 
-            if (IsNearVertex(target, pt))
+            if (locationType == PointLocationType.Vertex)
             {
-                return _zHeights[vid.Value];
+                return _nodeEvaluator(new NodeId(context.Vertex));
             }
 
-            _snapshot.RecentEdge = _impl.RecentEdge;
-            _neighbors.Clear();
+            (var triangle, var n1, var n2, var n3) =  _impl.GetTriangle(context.Edge);
 
-            var newFacet = SubDiv2D_Immutable.SynthesizeFacet(_snapshot, target, _neighbors);
-            double newFacetArea = Utils.ComputePolygonArea2(newFacet.Vertices);
-            double sumOfOverlapArea = 0.0;
-
-            double z = 0.0;
-            var pts = new List<Vector2>();
-            foreach (var nf in _neighbors)
+            if (!n1.IsSentinel && IsNearVertex(target, triangle.P1)) 
             {
-                if (!_zHeights.TryGetValue(nf, out var zn))
+                return _nodeEvaluator(n1);
+            }
+
+            if (!n2.IsSentinel && IsNearVertex(target, triangle.P2)) 
+            {
+                return _nodeEvaluator(n2);
+            }
+
+            if (!n3.IsSentinel && IsNearVertex(target, triangle.P3))
+            {
+                return _nodeEvaluator(n3);
+            }
+
+
+            // ------------------------------------------------------
+            // The fundamental idea of natural neighbor interpolation is
+            // based on measuring how the local geometry of a Voronoi
+            // Diagram would change if a new vertex were inserted.
+            // (recall that the Voronoi is the dual of a Delaunay Triangulation).
+            // Thus the NNI interpolation has common element with an
+            // insertion into a TIN.  In writing the code below, I have attempted
+            // to preserve similarities with the IncrementalTIN insertion logic
+            // where appropriate.
+            //
+            // Step 1 -----------------------------------------------------
+            // Create an array of edges that would connect to the radials
+            // from an inserted vertex if it were added at coordinates (x,y).
+            // This array happens to describe a Thiessen Polygon around the
+            // inserted vertex.
+
+
+            var envelope = _impl.GetBowyerWatsonEnvelope(x, y, context.Edge);
+
+
+            if (envelope == null || envelope.Count < 3)
+            {
+                return double.NaN;
+            }
+
+            // The envelope contains a series of edges definining the cavity
+            double[] w = _impl.GetBarycentricCoordinates(envelope, x, y);
+            
+            if (w == null)
+            {
+                // the coordinate is on the perimeter, no Barycentric coordinates
+                // are available.
+                return Double.NaN;
+            }
+
+            double zSum = 0;
+            for (int i = 0; i < envelope.Count; ++i)
+            {
+
+                // Skip non-contributing nodes (such as sentinels)
+                if (w[i] == 0.0)
                 {
                     continue;
                 }
 
-                pts.Clear();
-
-                _intersectionHelper.Intersect(newFacet.Vertices, _facets[nf].Vertices, pts);
-
-                if (pts.Count > 0)
-                {
-                    double overlapArea = Utils.ComputePolygonArea2(pts);
-                    z += zn * overlapArea / newFacetArea;
-                    sumOfOverlapArea += overlapArea;
-                }
+                var org = _impl.EdgeOrigin(envelope[i]);
+                double z = _nodeEvaluator(org);
+                zSum += w[i] * z;
             }
 
-            double k = newFacetArea / sumOfOverlapArea;
-            return z * k;
+            return zSum;
+
         }
 
-        private double LookupNearest(Vector2 target)
+
+        /// <summary>
+        ///  Computes interpolated Z value using the current <see cref="Method"/>
+        /// </summary>
+        /// <param name="x">x position</param>
+        /// <param name="y">y position </param>
+        /// <returns>interpolated Z value</returns>
+        public double Lookup(float x, float y)
         {
-            var vid = _impl.FindNearest(target, out var _);
-            return vid.HasValue && _zHeights.TryGetValue(vid.Value, out var result) ? result : double.NaN;
+            return _evaluator.Evaluate(x, y);
         }
 
-
         /// <summary>
         ///  Computes interpolated Z value using the current <see cref="Method"/>
         /// </summary>
         /// <param name="x">x position</param>
         /// <param name="y">y position </param>
         /// <returns>interpolated Z value</returns>
-        public double Lookup(float x, float y) => Lookup(new Vector2(x, y));
-
-
-        /// <summary>
-        ///  Computes interpolated Z value using the current <see cref="Method"/>
-        /// </summary>
-        /// <param name="x">x position</param>
-        /// <param name="y">y position </param>
-        /// <returns>interpolated Z value</returns>
-        public double Lookup(double x, double y) => Lookup(new Vector2((float)x, (float) y));
+        public double Lookup(double x, double y)
+        {
+            return _evaluator.Evaluate(x, y);
+        }
 
 
         /// <summary>
@@ -455,21 +719,56 @@ namespace NaturalNeighbor
         /// <summary>
         /// Number of samples used by the interpolator
         /// </summary>
-        public int NumberOfSamples => _zHeights.Count;
+        public int NumberOfSamples { get; private set; }
 
 
         /// <summary>
         /// Interpolation method 
         /// </summary>
-        public InterpolationMethod Method { get; set; }
+        public InterpolationMethod Method 
+        {
+            get 
+            { 
+                return _method; 
+            }
+            set 
+            {
+                if (value != _method)
+                {
+                    SetMethod(value);
+                }
+            }
 
-        private readonly HashSet<NodeId> _neighbors = new HashSet<NodeId>();
-        private readonly ConvexPolygonIntersectionHelper _intersectionHelper = new ConvexPolygonIntersectionHelper();
-        private Dictionary<NodeId, double> _zHeights;
-        private Dictionary<NodeId, VoronoiFacet> _facets = new Dictionary<NodeId, VoronoiFacet>();
+        }
+
+
+        private void SetMethod(InterpolationMethod value)
+        {
+            switch (value)
+            {
+                case InterpolationMethod.Linear:
+                    _evaluator = new PiecewiseLinearEvaluator(this, _sharedContext);
+                    break;
+
+                case InterpolationMethod.Natural:
+                    _evaluator = new NaturalNeighborEvaluator(this, _sharedContext);
+                    break;
+
+                case InterpolationMethod.Nearest:
+                    _evaluator = new NearestNeighborEvaluator(this, _sharedContext);
+                    break;
+
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(value));
+            }
+                
+            _method = value;
+        }
+
         private SubDiv2D_Mutable _impl;
-        private SubDiv2D_Immutable _snapshot;
+        private InterpolationMethod _method;
+        private InterpolationEvaluator _evaluator;
+        private SearchContext _sharedContext;
     }
-
 
 }

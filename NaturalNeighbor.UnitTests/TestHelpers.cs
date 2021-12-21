@@ -85,6 +85,29 @@ namespace NaturalNeighbor.UnitTests
             stdError = Math.Sqrt(sum2 / (count - 1));
         }
 
+        internal static void CalculateErrors(Func<float, float, double> model, IList<Vector2> samples, IList<double> values, out double maxError, out double stdError)
+        {
+            double sum2 = 0.0;
+            double max = 0.0;
+
+
+            int count = samples.Count;
+            for (int i = 0; i < samples.Count; ++i)
+            {
+                var v1 = values[i];
+                var v2 = model(samples[i].X, samples[i].Y);
+
+                var delta = v1 - v2;
+                sum2 += delta * delta;
+                max = Math.Max(max, Math.Abs(delta));
+            }
+
+            maxError = max;
+            stdError = Math.Sqrt(sum2 / (count - 1));
+        }
+
+
+
         internal static void SaveGrid(string filename, Func<float, float, double> func, GridSpec spec)
         {
             var sequence = CreateGridEx(spec);

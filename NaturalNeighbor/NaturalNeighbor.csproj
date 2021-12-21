@@ -13,7 +13,7 @@
     <RepositoryUrl>https://github.com/amyachin/NaturalNeighbor</RepositoryUrl>
     <RepositoryType>GitHub</RepositoryType>
     <PackageTags>voronoi interpolation GIS</PackageTags>
-    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+	<PackageLicenseExpression>MIT</PackageLicenseExpression>
     <GenerateDocumentationFile>True</GenerateDocumentationFile>
   </PropertyGroup>
 

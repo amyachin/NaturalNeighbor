@@ -11,7 +11,7 @@ namespace NaturalNeighbor.Internal
 {
     sealed class SubDiv2D_Immutable : SubDiv2D_Base
     {
-        internal SubDiv2D_Immutable(Bounds bounds, ImmutableDictionary<int, ImmutableVertexData> vertices, ImmutableDictionary<int, ImmutableQuadEdgeData> quadedges, int recentEdge)
+        internal SubDiv2D_Immutable(Bounds bounds, ImmutableDictionary<int, ImmutableVertexData> vertices, ImmutableDictionary<int, ImmutableQuadEdgeData> quadedges)
             : base(bounds)
         {
             _vertices = vertices;
@@ -19,32 +19,81 @@ namespace NaturalNeighbor.Internal
 
             _freeQEdge = quadedges.First(it => it.Value.IsFree).Key;
             _freePoint = vertices.First(it => it.Value.IsFree).Key;
-            RecentEdge = recentEdge;
         }
 
-        private SubDiv2D_Immutable(SubDiv2D_Immutable prototype): base(prototype.Bounds)
+        private SubDiv2D_Immutable(SubDiv2D_Immutable prototype) : base(prototype.Bounds)
         {
             _vertices = prototype._vertices;
             _quadEdges = prototype._quadEdges;
 
             _freePoint = prototype._freePoint;
             _freeQEdge = prototype._freeQEdge;
-            RecentEdge = prototype.RecentEdge;
         }
 
-        internal static VoronoiFacet SynthesizeFacet(SubDiv2D_Immutable prototype, Vector2 pt, HashSet<NodeId> neighbors)
+        internal static VoronoiFacet SynthesizeFacet(SubDiv2D_Immutable prototype, SearchContext context, Vector2 pt, HashSet<NodeId> neighbors)
         {
             neighbors.Clear();
             var impl = new SubDiv2D_Immutable(prototype);
-            return impl.SynthesizeFacetCore(pt, neighbors);
+            return impl.SynthesizeFacetCore(pt, context, neighbors);
         }
 
-        private VoronoiFacet SynthesizeFacetCore(Vector2 samplePt, HashSet<NodeId> neighbors)
+        internal static List<int> CreateEnvelope(SubDiv2D_Immutable prototype, SearchContext context, Vector2 pt)
         {
-            var vid = Insert(samplePt);
+            var impl = new SubDiv2D_Immutable(prototype);
+            return impl.SynthesizeEnvelope(pt, context);
+        }
+
+
+
+        private VoronoiFacet SynthesizeFacetCore(Vector2 samplePt, SearchContext context, HashSet<NodeId> neighbors)
+        {
+            var vid = Insert(samplePt, context);
             return CreateVoronoiFacet(vid, neighbors);
         }
 
+        private List<int> SynthesizeEnvelope(Vector2 samplePt, SearchContext context)
+        {
+            var vid = Insert(samplePt, context);
+            var v = _vertices[(int) vid];
+            var edge = v.firstEdge;
+
+            List<int> list = new List<int>();
+
+            EdgeDst(edge, out var prevDestPt);
+            edge = RotateEdge(edge, 1);
+            var t = edge;
+
+            // Gather cell points
+            do
+            {
+                t = GetEdge(t, TargetEdgeType.NEXT_AROUND_LEFT);
+                var e  = GetEdge(RotateEdge(t, -1), TargetEdgeType.NEXT_AROUND_LEFT);
+                list.Add(e);
+
+            }
+            while (t != edge);
+
+            return list;
+        }
+
+
+        //private void GetEnvelope(NodeId nodeId, List<int> polygon)
+        //{
+        //    var v = _vertices[(int) nodeId];
+        //    var edge = v.firstEdge;
+
+        //    EdgeDst(edge);
+
+        //    edge = RotateEdge(edge, 1);
+        //    var t = edge;
+        //    // Gather cell points
+        //    do
+        //    {
+        //        t = GetEdge(t, TargetEdgeType.NEXT_AROUND_LEFT);
+        //        polygon.Add(t);
+        //    }
+        //    while (t != edge);
+        //}
 
         private VoronoiFacet CreateVoronoiFacet(NodeId nodeId, HashSet<NodeId> neighbors)
         {

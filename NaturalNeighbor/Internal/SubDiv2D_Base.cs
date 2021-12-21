@@ -15,45 +15,41 @@ namespace NaturalNeighbor.Internal
 
         internal Bounds Bounds { get; }
 
-        internal int RecentEdge { get; set; }
-
-        public NodeId Insert(Vector2 pt)
+        public NodeId Insert(Vector2 pt, SearchContext context)
         {
-            var location = Locate(pt, out var curr_edge, out var curr_point);
+            var location = Locate(pt, context);
 
-            if (location == PointLocationType.Error)
+            switch (location)
             {
-                throw new InvalidOperationException("Unexpected error when locating the point.");
+                case PointLocationType.Error:
+                    throw new InvalidOperationException("Unexpected error when locating the point.");
+
+                case PointLocationType.OutsideRect:
+                    throw new InvalidOperationException("Point is outside of the bounding box.");
+
+                case PointLocationType.Vertex:
+                    return new NodeId(context.Vertex);
+
+                case PointLocationType.Edge:
+                    int deleted_edge = context.Edge;
+                    context.Edge = GetEdge(context.Edge, TargetEdgeType.PREV_AROUND_ORG);
+                    DeleteEdge(deleted_edge);
+                    break;
+
+                case PointLocationType.Inside:
+                    break;
+
+                default:
+                    throw new InvalidOperationException($"Locate returned invalid location = {location}.");
             }
 
-            if (location == PointLocationType.OutsideRect)
-            {
-                throw new InvalidOperationException("Point is outside of the bounding box.");
-            }
-
-            if (location == PointLocationType.Vertex)
-            {
-                return new NodeId(curr_point);
-            }
-
-
-            if (location == PointLocationType.Edge)
-            {
-                var deleted_edge = curr_edge;
-                RecentEdge = curr_edge = GetEdge(curr_edge, TargetEdgeType.PREV_AROUND_ORG);
-                DeleteEdge(deleted_edge);
-            }
-            else if (location != PointLocationType.Inside)
-            {
-                throw new InvalidOperationException($"Locate returned invalid location = {location}.");
-            }
-
+            int curr_edge = context.Edge;
             Debug.Assert(curr_edge != 0);
 
             InvalidateGeometry();
 
 
-            curr_point = NewPoint(pt, false);
+            int curr_point = NewPoint(pt, false);
             int base_edge = NewEdge();
             int first_point = EdgeOrg(curr_edge);
             SetEdgePoints(base_edge, first_point, curr_point);
@@ -96,6 +92,7 @@ namespace NaturalNeighbor.Internal
 
 
         public Vector2 this[NodeId node] => GetVertexLocation((int)node);
+
 
 
         protected virtual void InvalidateGeometry()
@@ -160,7 +157,7 @@ namespace NaturalNeighbor.Internal
 
         protected abstract int GetEdge(int edge, TargetEdgeType targetType);
 
-        internal PointLocationType Locate(Vector2 pt, out int prmEdge, out int prmVertex)
+        internal PointLocationType Locate(Vector2 pt, SearchContext context)
         {
 
             var quadEdgesCount = GetQuadEdgesCount();
@@ -176,12 +173,12 @@ namespace NaturalNeighbor.Internal
 
             if (!bounds.Contains(pt))
             {
-                prmEdge = 0;
-                prmVertex = 0;
+                context.Edge = 0;
+                context.Vertex = 0;
                 return PointLocationType.OutsideRect;
             }
 
-            int edge = RecentEdge;
+            int edge = context.RecentEdge;
             int vertex = 0;
 
             Debug.Assert(edge > 0);
@@ -244,7 +241,7 @@ namespace NaturalNeighbor.Internal
                 }
             }
 
-            RecentEdge = edge;
+            context.RecentEdge = edge;
 
             if (location == PointLocationType.Inside)
             {
@@ -280,9 +277,9 @@ namespace NaturalNeighbor.Internal
                 vertex = 0;
             }
 
-            prmEdge = edge;
-            prmVertex = vertex;
 
+            context.Edge = edge;
+            context.Vertex = vertex;
             return location;
         }
 
@@ -334,7 +331,7 @@ namespace NaturalNeighbor.Internal
             Splice(sedge, GetEdge(b, TargetEdgeType.NEXT_AROUND_LEFT));
         }
 
-        private int IsRightOf(Vector2 pt, int edge)
+        internal int IsRightOf(Vector2 pt, int edge)
         {
             EdgeOrg(edge, out var org);
             EdgeDst(edge, out var dest);
