@@ -110,14 +110,6 @@ namespace NaturalNeighbor.UnitTests
             Assert.True(maxError < 0.02);
             Assert.True(stdError < 0.004);
 
-            var samplePoints = TestHelpers.CreateGrid(sampleSpec).ToArray();
-            Array.Reverse(samplePoints);
-
-            var values = new double[samplePoints.Length];
-
-            interpolator.LookupRange(samplePoints, values, new System.Threading.Tasks.ParallelOptions { });
-            Assert.DoesNotContain( values, double.IsNaN);
-
 
             //TestHelpers.SaveGrid(@"C:\Work\matlab-Z-orig.csv", SampleFunc, modelSpec);
 
@@ -155,19 +147,6 @@ namespace NaturalNeighbor.UnitTests
 
             Assert.True(maxError < 0.02);
             Assert.True(stdError < 0.004);
-
-
-            //TestHelpers.SaveGrid(@"C:\Work\matlab-Z-orig.csv", SampleFunc, modelSpec);
-
-            //interpolator.Method = InterpolationMethod.Nearest;
-            //TestHelpers.SaveGrid(@"C:\Work\matlab-Z-nearest.csv", (float x, float y) => interpolator.Lookup(x, y), sampleSpec2);
-
-            //interpolator.Method = InterpolationMethod.Linear;
-            //TestHelpers.SaveGrid(@"C:\Work\matlab-Z-linear.csv", (float x, float y) => interpolator.Lookup(x, y), sampleSpec2);
-
-            //interpolator.Method = InterpolationMethod.Natural;
-            //TestHelpers.SaveGrid(@"C:\Work\matlab-Z-natural.csv", (float x, float y) => interpolator.Lookup(x, y), sampleSpec2);
-
         }
 
     }
