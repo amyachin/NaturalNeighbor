@@ -6,6 +6,8 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Numerics;
+using Xunit;
+
 namespace NaturalNeighbor.UnitTests
 {
     static class TestHelpers
@@ -39,6 +41,89 @@ namespace NaturalNeighbor.UnitTests
         {
             return CreateGridEx(spec.OffsetX, spec.OffsetY, spec.Width, spec.Height, spec.Rows, spec.Cols);
         }
+
+
+        internal static IEnumerable<Vector3> ReadTestData(string filename)
+        {
+            using (var txt = File.OpenText(filename))
+            {
+                txt.ReadLine(); // Skip columns
+
+                var s = txt.ReadLine();
+                while (s != null)
+                {
+                    var parts = s.Split('\t');
+                    if (parts.Length == 3 && 
+                        double.TryParse(parts[0], out var x) &&
+                        double.TryParse(parts[1], out var y) &&
+                        double.TryParse(parts[2], out var z))
+                    {
+                        yield return new Vector3((float) x, (float) y, (float) z);
+                    }
+
+                    s = txt.ReadLine();
+                }
+            }
+        }
+
+        internal static void ComparePolygons(IList<int> polygon1, IList<int> polygon2)
+        {
+            Assert.Equal(polygon1.Count, polygon2.Count);
+
+
+            int edgeId = polygon1[0];
+            int offset = polygon2.IndexOf(edgeId);
+            
+            Assert.NotEqual(-1, offset);
+
+            int cnt = polygon1.Count;
+            for (int i = 0; i < cnt; ++i)
+            {
+                int i1 = (i + offset) % cnt;
+                Assert.Equal(polygon1[i], polygon2[i1]);
+            }
+        }
+
+
+        internal static void CompareNodeWeights(IReadOnlyList<Internal.NodeWeight> referenceWeights, IReadOnlyList<Internal.NodeWeight> weights, int precision)
+        {
+            var poly1 = referenceWeights.Select(it => (int) it.NodeId).ToArray();
+            var poly2 = weights.Select(it => (int) it.NodeId).ToArray();
+
+            ComparePolygons(poly1, poly2);
+            var expectedWeights = RemapWeights(poly1, poly2, referenceWeights.Select(it => it.Weight).ToArray());
+
+            for (int i = 0; i < weights.Count; ++i)
+            {
+                Assert.Equal(expectedWeights[i], weights[i].Weight, precision);
+            }
+
+        }
+
+
+
+        internal static IReadOnlyList<double> RemapWeights(IList<int> source, IList<int> dest, IList<double> weights)
+        {
+            Assert.Equal(source.Count, dest.Count);
+
+
+            int edgeId = source[0];
+            int offset = dest.IndexOf(edgeId);
+
+            Assert.NotEqual(-1, offset);
+
+            int cnt = source.Count;
+            double[] results = new double[cnt];
+
+            for (int i = 0; i < cnt; ++i)
+            {
+                int i1 = (i + offset) % cnt;
+                results[i1] = weights[i];
+            }
+
+            return results;
+        }
+
 
 
         internal static IEnumerable<Vector2> CreateCircle(

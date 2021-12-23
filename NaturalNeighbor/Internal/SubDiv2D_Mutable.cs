@@ -278,24 +278,24 @@ namespace NaturalNeighbor.Internal
         {
             double[] weights = new double[envelope.Count];
 
-            var c0 = default(Circumcircle);
+            var g2 = default(Circumcircle);
             var c1 = default(Circumcircle);
-            var c2 = default(Circumcircle);
-            var c3 = default(Circumcircle);
-
             double wSum = 0;
 
             for (int i0 = 0, nEdge = envelope.Count; i0 < nEdge; i0++)
             {
-                int i1 = (i0 + 1) % nEdge; // next index
+
+                int i1 = (i0 + 1) % nEdge; // next edge in the polygon
 
                 var e0 = envelope[i0];
                 var e1 = envelope[i1];
 
                 EdgeOrg(e0, out var a);
-                var currNode = EdgeOrg(e1, out var b); // Same as EdgeDst(e0)
+                var nodeB = EdgeOrg(e1, out var b); // Same as EdgeDst(e0)
+                var currentNode = new NodeId(nodeB);
                 EdgeDst(e1, out var c);
 
+                Circumcircle g1;
 
                 double ax = a.X - x;
                 double ay = a.Y - y;
@@ -305,10 +305,11 @@ namespace NaturalNeighbor.Internal
                 double cy = c.Y - y;
 
 
-                double x0 = (ax + bx) * 0.5;
-                double y0 = (ay + by) * 0.5;
-                double x1 = (bx + cx) * 0.5;
-                double y1 = (by + cy) * 0.5;
+                double xm1 = (ax + bx) * 0.5;
+                double ym1 = (ay + by) * 0.5;
+                double xm2 = (bx + cx) * 0.5;
+                double ym2 = (by + cy) * 0.5;
+
 
                 // for the first edge processed, the code needs to initialize values
                 // for c0 and c3.  But after that, the code can reuse values from
@@ -316,75 +317,79 @@ namespace NaturalNeighbor.Internal
 
                 if (i0 == 0)
                 {
-                    c0 = Utils.ComputeCurcumcircle(ax, ay, bx, by, 0, 0);
-                    EdgeDst(GetEdge(e0, TargetEdgeType.NEXT_AROUND_LEFT), out var pt);
-                    c3 = Utils.ComputeCurcumcircle(ax, ay, bx, by, pt.X - x, pt.Y - y);
+                    g1 = Utils.ComputeCurcumcircle(ax, ay, bx, by, 0, 0);
+
+                    if (!currentNode.IsSentinel)
+                    {
+                        EdgeDst(GetEdge(e0, TargetEdgeType.NEXT_AROUND_ORG), out var pt);
+                        c1 = Utils.ComputeCurcumcircle(ax, ay, bx, by, pt.X - x, pt.Y - y);
+                    }
                 }
                 else
                 {
-                    c0 = c1;
+                    g1 = g2;
                 }
 
-                c1 = Utils.ComputeCurcumcircle(bx, by, cx, cy, 0, 0);
+                g2 = Utils.ComputeCurcumcircle(bx, by, cx, cy, 0, 0);
 
-                // Skip non-contributing nodes from the weight calculation
-                if (currNode >= 4)
+                if (currentNode.IsSentinel)
                 {
-
-                    // compute the reduced "component area" of the Theissen polygon
-                    // constructed around point B, the second point of edge[i0].
-                    double wXY = (x0 * c0.CenterY - c0.CenterX * y0)
-                      + (c0.CenterX * c1.CenterY - c1.CenterX * c0.CenterY)
-                      + (c1.CenterX * y1 - x1 * c1.CenterY);
-
-
-                    // compute the full "component area" of the Theissen polygon
-                    // constructed around point B, the second point of edge[i0]
-                    var n = GetEdge(e0, TargetEdgeType.NEXT_AROUND_LEFT);
-                    double wThiessen = x0 * c3.CenterY - c3.CenterX * y0;
-
-                    while (n != e1)
-                    {
-                        var n1 = SymEdge(n);
-                        n = GetEdge(n1, TargetEdgeType.NEXT_AROUND_LEFT);
-                        c2 = c3;
-
-                        EdgeOrg(n1, out a);
-                        EdgeOrg(n, out b); // Same As EdgeDst(n1))
-                        EdgeDst(n, out c);
-
-
-                        ax = a.X - x;
-                        ay = a.Y - y;
-                        bx = b.X - x;
-                        by = b.Y - y;
-                        cx = c.X - x;
-                        cy = c.Y - y;
-
-                        c3 = Utils.ComputeCurcumcircle(ax, ay, bx, by, cx, cy);
-                        wThiessen += c2.CenterX * c3.CenterY - c3.CenterX * c2.CenterY;
-                    }
-
-                    wThiessen += c3.CenterX * y1 - x1 * c3.CenterY;
-
-
-
-
-                    // Compute wDelta, the amount of area that the Theissen polygon
-                    // constructed around vertex B would yield to an insertion at
-                    // the query point.
-                    //    for convenience, both the wXY and wThiessen weights were
-                    // computed in a clockwise order, which means they are the
-                    // negative of what we need for the weight computation, so
-                    // negate them and  -(wTheissen-wXY) becomes wXY-wTheissen
-                    // Also, there would normally be a divide by 2 factor from the
-                    // shoelace area formula, but that is ommitted because it will
-                    // drop out when we unitize the sum of the set of the weights.
-
-                    double wDelta = wXY - wThiessen;
-                    wSum += wDelta;
-                    weights[i1] = wDelta;
+                    EdgeDst(GetEdge(e1, TargetEdgeType.NEXT_AROUND_LEFT), out var pt);
+                    c1 = Utils.ComputeCurcumcircle(bx, by, cx, cy, pt.X - x, pt.Y - y);
+                    continue;
                 }
+
+                // compute the reduced "component area" of the Theissen polygon
+                // constructed around point B, the second point of edge[i0].
+                double wXY = (xm1 * g1.CenterY - g1.CenterX * ym1)
+                  + (g1.CenterX * g2.CenterY - g2.CenterX * g1.CenterY)
+                  + (g2.CenterX * ym2 - xm2 * g2.CenterY);
+
+
+                // compute the full "component area" of the Theissen polygon
+                // constructed around point B, the second point of edge[i0]
+                double wThiessen = xm1 * c1.CenterY- c1.CenterX * ym1;
+
+                var n = GetEdge(e0, TargetEdgeType.NEXT_AROUND_LEFT);
+                while (n != e1)
+                {
+                    var n1 = SymEdge(n);
+                    n = GetEdge(n1, TargetEdgeType.NEXT_AROUND_LEFT);
+
+                    EdgeOrg(n1, out a);
+//                    EdgeOrg(n, out b); same as original b
+                    EdgeDst(n, out c);
+
+                    ax = a.X - x;
+                    ay = a.Y - y;
+                    bx = b.X - x;
+                    by = b.Y - y;
+                    cx = c.X - x;
+                    cy = c.Y - y;
+
+                    Circumcircle c2 = Utils.ComputeCurcumcircle(ax, ay, bx, by, cx, cy); 
+                    wThiessen += c1.CenterX * c2.CenterY - c2.CenterX * c1.CenterY;
+                    c1 = c2;
+                }
+
+                wThiessen += c1.CenterX * ym2 - xm2 * c1.CenterY;
+
+
+
+                // Compute wDelta, the amount of area that the Theissen polygon
+                // constructed around vertex B would yield to an insertion at
+                // the query point.
+                //    for convenience, both the wXY and wThiessen weights were
+                // computed in a clockwise order, which means they are the
+                // negative of what we need for the weight computation, so
+                // negate them and  -(wTheissen-wXY) becomes wXY-wTheissen
+                // Also, there would normally be a divide by 2 factor from the
+                // shoelace area formula, but that is ommitted because it will
+                // drop out when we unitize the sum of the set of the weights.
+
+                double wDelta = wXY - wThiessen;
+                wSum += wDelta;
+                weights[i1] = wDelta;
             }
 
             // Normalize the weights
