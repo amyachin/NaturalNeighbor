@@ -59,7 +59,6 @@ namespace NaturalNeighbor.Internal
 
             List<int> list = new List<int>();
 
-            EdgeDst(edge, out var prevDestPt);
             edge = RotateEdge(edge, 1);
             var t = edge;
 

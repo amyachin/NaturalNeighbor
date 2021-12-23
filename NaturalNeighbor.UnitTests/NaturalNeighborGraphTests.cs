@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -22,27 +23,54 @@ namespace NaturalNeighbor.UnitTests
             var points = TestHelpers.CreateGrid(modelSpec).ToArray();
 
             var heights = points.Select(it => TestFunctions.SampleFunc(it.X, it.Y)).ToArray();
-            _interpolator = Interpolator2d.Create(points, heights, 0.5);
+            _gridInterpolator = Interpolator2d.Create(points, heights, 0.5);
+
+            var points2 = TestHelpers.ReadTestData("TestData/ZGrid_filtered.csv").ToArray();
+
+            _gridWithCavitiesInterpolator = Interpolator2d.Create(points2, 80000);
         }
 
-        Interpolator2d _interpolator;
+        Interpolator2d _gridInterpolator;
+        Interpolator2d _gridWithCavitiesInterpolator;
+
 
         [Theory]
-        [InlineData(-1.918367386, -2, 5)]
+        [InlineData(NaturalNeighborTestPattern.Grid, -1.918367386, -2)]
+        [InlineData(NaturalNeighborTestPattern.GridWithCavities, 167036.709214, -320947.760376)]
 
-        public void NaturalNeighbors_GetBowyerWatsonEnvelope(double x, double y, int expectedEdgeCount)
+        public void NaturalNeighbors_TestNaturalNeighborWeights(NaturalNeighborTestPattern pattern, double x, double y)
         {
-            var refenvelope = _interpolator.CreateReferenceEnvelope(x, y);
-            var envelope = _interpolator.CreateEnvelope(x, y);
 
-            Assert.Equal(expectedEdgeCount, refenvelope.Count);
-            Assert.Equal(expectedEdgeCount, envelope.Count);
+            var interpolator = GetInterpolator(pattern);
 
-            for (int i = 0; i < expectedEdgeCount; ++i) 
-            {
-                Assert.Equal(refenvelope[i], envelope[i]);
-            }
+            var referenceWeights = Internal.TestUtils.ComputeReferenceNeighborWeights(interpolator, x, y);
+            var weights = Internal.TestUtils.ComputeNeighborWeights(interpolator, x, y);
+
+            Assert.Equal(referenceWeights.Length, weights.Length);
+            TestHelpers.CompareNodeWeights(referenceWeights, weights, 5);
         }
 
+        private Interpolator2d GetInterpolator(NaturalNeighborTestPattern pattern)
+        {
+            switch (pattern)
+            {
+                case NaturalNeighborTestPattern.Grid:
+                    return _gridInterpolator;
+                case NaturalNeighborTestPattern.GridWithCavities:
+                    return _gridWithCavitiesInterpolator;
+
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(pattern));
+            }
+
+        }
+
+    }
+
+
+    public enum NaturalNeighborTestPattern
+    {
+        Grid = 0,
+        GridWithCavities = 1
     }
 }

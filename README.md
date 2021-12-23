@@ -22,7 +22,12 @@ var interp = Interpolator2d.Create(datapoints);
 // interp.Method = InterpolationMethod.Linear;
 
 var z = interp.Lookup(1.3f, 2.1f);
+
+//Batch operations
+interp.LookupRange(points, zvalues);
+
 ```
+
 
 
 `SubDivision2d`

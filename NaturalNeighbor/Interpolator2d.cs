@@ -474,28 +474,14 @@ namespace NaturalNeighbor
         }
 
 
-        internal List<int> CreateReferenceEnvelope(double x, double y)
+        /// <summary>
+        /// Expose to unit tests
+        /// </summary>
+        /// <returns></returns>
+        internal SubDiv2D_Mutable GetImplementation()
         {
             CheckInitialized();
-
-            SubDiv2D_Immutable immutable = _impl.ToImmutable();
-            return SubDiv2D_Immutable.CreateEnvelope(immutable, _sharedContext, new Vector2((float) x, (float) y));
-        }
-
-        internal List<int> CreateEnvelope(double x, double y)
-        {
-            CheckInitialized();
-
-            var locType = _impl.Locate(new Vector2((float) x, (float) y), _sharedContext);
-
-            if (locType == PointLocationType.Edge || locType == PointLocationType.Inside)
-            {
-                return _impl.GetBowyerWatsonEnvelope(x, y, _sharedContext.Edge);
-            }
-            else
-            {
-                return null;
-            }
+            return _impl;
         }
 
         private void CheckInitialized()
@@ -505,19 +491,6 @@ namespace NaturalNeighbor
                 throw new InvalidOperationException("Iterator is not initialized.");
             }
         }
-
-        internal (NodeId, Vector2) GetEdgeOrigin(int edge)
-        {
-            var nodeID = _impl.EdgeOrigin(edge);
-            return (nodeID, _impl[nodeID]);
-        }
-
-        internal (NodeId, Vector2) GetEdgeDestination(int edge)
-        {
-            var nodeID = _impl.EdgeDestination(edge);
-            return (nodeID, _impl[nodeID]);
-        }
-
 
         bool IsNearVertex(Vector2 target, Vector2 nearestVertexPt)
         {
