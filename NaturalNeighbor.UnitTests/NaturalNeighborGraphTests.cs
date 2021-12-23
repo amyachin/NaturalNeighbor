@@ -25,7 +25,7 @@ namespace NaturalNeighbor.UnitTests
             var heights = points.Select(it => TestFunctions.SampleFunc(it.X, it.Y)).ToArray();
             _gridInterpolator = Interpolator2d.Create(points, heights, 0.5);
 
-            var points2 = TestHelpers.ReadTestData("TestData\\ZGrid_filtered.csv").ToArray();
+            var points2 = TestHelpers.ReadTestData("TestData/ZGrid_filtered.csv").ToArray();
 
             _gridWithCavitiesInterpolator = Interpolator2d.Create(points2, 80000);
         }
